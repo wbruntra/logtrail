@@ -1,18 +1,23 @@
 const fs = require('fs')
 const path = require('path')
 
-const logFilePath = path.join(__dirname, '../test/log.txt')
 
-function writeLog() {
-  const timestamp = new Date().toISOString()
-  const logMessage = `[${timestamp}] test\n`
+const logFilePath1 = path.join(__dirname, '../test/log.txt')
+const logFilePath2 = path.join(__dirname, '../test/log2.txt')
 
-  fs.appendFile(logFilePath, logMessage, (err) => {
+
+function writeLog(filePath, label) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${label} test\n`;
+  fs.appendFile(filePath, logMessage, (err) => {
     if (err) {
-      console.error('Error writing to log file:', err)
+      console.error(`Error writing to ${filePath}:`, err);
     }
-  })
+  });
 }
 
-console.log(`Starting log writer. Appending to ${logFilePath}`)
-setInterval(writeLog, 2000)
+console.log(`Starting log writer. Appending to both ${logFilePath1} and ${logFilePath2}`);
+setInterval(() => {
+  writeLog(logFilePath1, 'Main');
+  writeLog(logFilePath2, 'Secondary');
+}, 2000);

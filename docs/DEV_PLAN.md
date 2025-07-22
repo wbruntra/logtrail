@@ -29,20 +29,21 @@ This document outlines the steps to build a web-based log monitoring application
 
 ## 🚀 Phase 3: Configuration Management & Multi-File Support
 
+
 1.  **Configuration System:**
-    *   Create a configuration file (JSON/YAML) to define available log files
-    *   Include file paths, display names, and access permissions
-    *   Implement hot-reload of configuration changes
+    *   ✅ Create a configuration file (YAML) to define available log files
+    *   ✅ Include file paths, display names, and (optionally) descriptions
+    *   ⏳ Implement hot-reload of configuration changes
 
 2.  **File Selection UI:**
-    *   Add a dropdown/selector to choose which log file to monitor
-    *   Display file metadata (size, last modified, etc.)
-    *   Show connection status for each monitored file
+    *   ✅ Add a dropdown/selector to choose which log file to monitor
+    *   ⏳ Display file metadata (size, last modified, etc.)
+    *   ⏳ Show connection status for each monitored file
 
 3.  **Multi-File Monitoring:**
-    *   Support simultaneous monitoring of multiple files
-    *   Implement tabbed interface or split-view for multiple logs
-    *   Color-code or label different log sources
+    *   ✅ Support simultaneous monitoring of multiple files (user can select any configured file)
+    *   ⏳ Implement tabbed interface or split-view for multiple logs
+    *   ⏳ Color-code or label different log sources
 
 ## 🎨 Phase 4: Enhanced User Experience
 
