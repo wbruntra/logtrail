@@ -15,18 +15,12 @@ app.use(
     name: 'logtrail-session',
     keys: [secrets.sessionSecret],
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    sameSite: 'lax', // or 'none' if using HTTPS and cross-site
-    secure: false, // set to true if using HTTPS
-    httpOnly: true,
   }),
 )
 
 // Middleware for logging requests
 app.use(logger('dev'))
-app.use(cors({
-  origin: true, // reflect request origin
-  credentials: true,
-}))
+
 app.use(express.json())
 
 const react_client_directory = path.join(__dirname, 'client/dist')
@@ -34,25 +28,6 @@ const react_client_directory = path.join(__dirname, 'client/dist')
 // Add this to verify the directory exists
 // Serve static files from client/dist
 app.use(express.static(react_client_directory))
-
-// add a login endpoint
-app.post('/api/login', (req, res) => {
-  const { password } = req.body
-  if (password === secrets.password) {
-    req.session.authenticated = true
-    res.status(200).json({ message: 'Login successful', authenticated: true })
-  } else {
-    res.status(401).json({ error: 'Invalid password', authenticated: false })
-  }
-})
-
-app.get('/api/status', (req, res) => {
-  if (req.session.authenticated) {
-    res.status(200).json({ status: 'Authenticated', authenticated: true })
-  } else {
-    res.status(200).json({ status: 'Unauthenticated', authenticated: false })
-  }
-})
 
 // Mount the transcriptions router
 const appRouter = require('./routes/index.js')

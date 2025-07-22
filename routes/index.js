@@ -1,9 +1,29 @@
 const express = require('express')
 const router = express.Router()
+const secrets = require('../secrets') 
 
 // Keep original health check at root level
 router.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' })
+})
+
+router.get('/status', (req, res) => {
+  if (req.session.authenticated) {
+    res.status(200).json({ status: 'Authenticated', authenticated: true })
+  } else {
+    res.status(200).json({ status: 'Unauthenticated', authenticated: false })
+  }
+})
+
+// add a login endpoint
+router.post('/login', (req, res) => {
+  const { password } = req.body
+  if (password === secrets.password) {
+    req.session.authenticated = true
+    res.status(200).json({ message: 'Login successful', authenticated: true })
+  } else {
+    res.status(401).json({ error: 'Invalid password', authenticated: false })
+  }
 })
 
 module.exports = router

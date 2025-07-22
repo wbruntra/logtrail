@@ -6,18 +6,6 @@ const { getLogConfig } = require('../services/config')
 const FileWatcher = require('../services/file-watcher')
 const { tailFile } = require('../services/tail-file')
 
-// Middleware to check authentication
-const requireLogin = (req, res, next) => {
-  console.log('Session', req.session)
-  if (req.session.authenticated) {
-    next()
-  } else {
-    res.status(401).json({ error: 'Unauthorized' })
-  }
-}
-
-router.use(requireLogin)
-
 // Endpoint to get the last N lines of a log file
 router.get('/tail', async (req, res) => {
   const fileParam = req.query.file

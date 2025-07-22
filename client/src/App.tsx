@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react'
-import { useUser } from './UserContext'
-import LoginForm from './LoginForm'
 import './App.scss'
 
 function App() {
-  const { user, setUser } = useUser()
   const [logs, setLogs] = useState<string[]>([])
   const logContainerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -22,25 +19,9 @@ function App() {
   const [historyOffset, setHistoryOffset] = useState<number | undefined>(undefined)
   const [hasMoreHistory, setHasMoreHistory] = useState(true)
   const [loadingHistory, setLoadingHistory] = useState(false)
-  const [checkingAuth, setCheckingAuth] = useState(true)
-
-  // On mount, check auth status
-  useEffect(() => {
-    fetch('/api/status', { credentials: 'include' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.authenticated) {
-          setUser({ username: 'user', authenticated: true })
-        } else {
-          setUser(null)
-        }
-      })
-      .finally(() => setCheckingAuth(false))
-  }, [setUser])
 
   // Fetch log file list on mount if authenticated
   useEffect(() => {
-    if (!user) return
     fetch('/api/logs/list', { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
@@ -49,18 +30,20 @@ function App() {
           setSelectedLog(data.logs[0].path)
         }
       })
-  }, [user])
+  }, [])
 
   // Fetch last 100 lines and connect to log stream when selectedLog changes
   useEffect(() => {
-    if (!user || !selectedLog) return
+    if (!selectedLog) return
     setLogs([])
     setHistoryOffset(undefined)
     setHasMoreHistory(true)
     if (eventSource) {
       eventSource.close()
     }
-    fetch(`/api/logs/history?file=${encodeURIComponent(selectedLog)}&limit=100`, { credentials: 'include' })
+    fetch(`/api/logs/history?file=${encodeURIComponent(selectedLog)}&limit=100`, {
+      credentials: 'include',
+    })
       .then((res) => res.json())
       .then((data) => {
         let initialLines: string[] = []
@@ -85,12 +68,11 @@ function App() {
       if (eventSource) eventSource.close()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedLog])
+  }, [selectedLog])
 
   // Infinite scroll up: load more history when near the top
   const loadMoreHistory = async () => {
     if (
-      !user ||
       !selectedLog ||
       !hasMoreHistory ||
       loadingHistory ||
@@ -109,7 +91,7 @@ function App() {
       `/api/logs/history?file=${encodeURIComponent(
         selectedLog,
       )}&limit=100&before=${historyOffset}`,
-      { credentials: 'include' }
+      { credentials: 'include' },
     )
     const data = await res.json()
     if (data && Array.isArray(data.lines) && data.lines.length > 0) {
@@ -152,13 +134,6 @@ function App() {
     if (el.scrollTop >= 100 && historyLoadLock.current) {
       historyLoadLock.current = false
     }
-  }
-
-  if (checkingAuth) {
-    return <div>Loading...</div>
-  }
-  if (!user) {
-    return <LoginForm />
   }
 
   return (
