@@ -1,10 +1,10 @@
 logs:
+  - name: System Log (syslog)
+    path: /var/log/syslog
+    description: System log file for monitoring OS and service events
   - name: Main Log
     path: test/log.txt
     description: The primary test log file
   - name: Secondary Log
     path: test/log2.txt
     description: A secondary log file for demonstration
-  - name: System Log (syslog)
-    path: /var/log/syslog
-    description: System log file for monitoring OS and service events

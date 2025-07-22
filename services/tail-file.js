@@ -1,14 +1,20 @@
-const fs = require('fs');
+const { exec } = require('child_process')
+const { promisify } = require('util')
 
-function tailFile(filePath, lines = 100) {
-  return new Promise((resolve, reject) => {
-    fs.readFile(filePath, 'utf8', (err, data) => {
-      if (err) return reject(err);
-      const allLines = data.split(/\r?\n/);
-      const tailed = allLines.slice(-lines).join('\n');
-      resolve(tailed);
-    });
-  });
+const execAsync = promisify(exec)
+
+async function tailFile(filePath, lines = 100) {
+  try {
+    const { stdout } = await execAsync(`tail -n ${lines} "${filePath}"`)
+
+    // Remove the trailing newline if present to match original behavior
+    return stdout.replace(/\n$/, '')
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.message.includes('No such file')) {
+      throw new Error(`File not found: ${filePath}`)
+    }
+    throw new Error(`Failed to read log file: ${error.message}`)
+  }
 }
 
-module.exports = { tailFile };
+module.exports = { tailFile }
