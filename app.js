@@ -19,7 +19,7 @@ app.use(
   cookieSession({
     name: 'logtrail-session',
     keys: [secrets.cookieSecret],
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
   }),
 )
 
