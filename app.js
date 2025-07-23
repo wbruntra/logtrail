@@ -1,27 +1,27 @@
+require('dotenv').config({
+  quiet: true,
+})
 const express = require('express')
-const cors = require('cors')
 const logger = require('morgan')
 const path = require('path')
 const cookieSession = require('cookie-session')
 const secrets = require('./secrets') // Assuming secrets.js is in the same directory
 
-require('dotenv').config()
 
 const app = express()
-
-// Session cookie middleware
-app.use(
-  cookieSession({
-    name: 'logtrail-session',
-    keys: [secrets.sessionSecret],
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-  }),
-)
 
 // Middleware for logging requests
 app.use(logger('dev'))
 
 app.use(express.json())
+app.use(express.urlencoded({ extended: false }))
+app.use(
+  cookieSession({
+    name: 'logtrail-session',
+    keys: [secrets.cookieSecret],
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+  }),
+)
 
 const react_client_directory = path.join(__dirname, 'client/dist')
 
