@@ -20,9 +20,9 @@ function App() {
   const [hasMoreHistory, setHasMoreHistory] = useState(true)
   const [loadingHistory, setLoadingHistory] = useState(false)
 
-  // Fetch log file list on mount if authenticated
+  // Fetch log file list on mount
   useEffect(() => {
-    fetch('/api/logs/list', { credentials: 'include' })
+    fetch('/api/logs/list')
       .then((res) => res.json())
       .then((data) => {
         setLogFiles(data.logs || [])
@@ -137,9 +137,27 @@ function App() {
   }
 
   return (
-    <div className="App">
-      {/* ...existing code... */}
-      <header className="App-header">{/* ...existing code... */}</header>
+    <div className="App" data-bs-theme="dark">
+      <header className="App-header">
+        <div className="container">
+          <h1 className="display-5 mb-3">Logtrail</h1>
+          <div className="mb-3">
+            <label htmlFor="log-select" className="form-label me-2">Select log file:</label>
+            <select
+              id="log-select"
+              className="form-select d-inline-block w-auto"
+              value={selectedLog}
+              onChange={(e) => setSelectedLog(e.target.value)}
+            >
+              {logFiles.map((log) => (
+                <option key={log.path} value={log.path}>
+                  {log.name} {log.description ? `- ${log.description}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </header>
       <div className="main-content">
         <div className="log-container" ref={logContainerRef} onScroll={handleScroll}>
           {loadingHistory && (
