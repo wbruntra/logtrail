@@ -1,0 +1,60 @@
+# Central Server Configuration
+mode: central
+
+# Server settings
+server:
+  port: 3000
+  host: "0.0.0.0"
+  
+# Security settings
+security:
+  cookie_secret: "${COOKIE_SECRET}"
+  session_max_age: 15552000000  # 180 days in milliseconds
+  
+# WebSocket server configuration
+websocket:
+  enabled: true
+  port: 3000
+  path: "/ws"
+  ping_interval: 30000
+  
+# Agent management
+agents:
+  connection_timeout: 30000
+  heartbeat_interval: 10000
+  max_agents: 100
+  
+# Local log configuration
+logs:
+  - name: "Local System Log"
+    path: "/var/log/syslog"
+    type: "local"
+    description: "Local system logs"
+    enabled: true
+    
+  - name: "Application Log"
+    path: "./logs/logtrail-combined.log"
+    type: "local"
+    description: "Logtrail application logs"
+    enabled: true
+
+# Remote log configuration (populated by agent registration)
+remote_logs: []
+
+# Authentication
+auth:
+  provider: "local"  # local, ldap, oauth
+  require_login: true
+  
+# Features
+features:
+  enable_search: true
+  enable_history: true
+  enable_real_time: true
+  enable_agent_monitoring: true
+  
+# Performance
+performance:
+  max_concurrent_streams: 50
+  log_buffer_size: 1000
+  history_page_size: 100

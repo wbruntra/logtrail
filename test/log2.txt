@@ -2000,3 +2000,70 @@
 [2025-07-22T16:19:28.646Z] Secondary test
 [2025-07-22T16:19:30.648Z] Secondary test
 [2025-07-22T16:19:32.651Z] Secondary test
+[SECONDARY] POST /api/auth/login 201 45.678 ms - 256
+[SECONDARY] GET /api/status 200 5.123 ms - 128
+[SECONDARY] GET /api/public/data 304 2.123 ms - -
+[SECONDARY] GET /api/nonexistent 404 12.345 ms - 256
+[SECONDARY] GET /api/forbidden 403 5.678 ms - 64
+[SECONDARY] GET /api/internal-error 500 125.678 ms - 1024
+[SECONDARY] sending cached sheet public_talent_sheet:20494 page_1_limit_18
+[SECONDARY] TEAM ID 134
+[SECONDARY] Cache hit for key: user_session_abc123
+[SECONDARY] INFO: Application started successfully
+[SECONDARY] ERROR: Database connection failed
+[SECONDARY] FATAL: Critical system failure detected
+[SECONDARY] POST /api/auth/login 201 45.678 ms - 256
+[SECONDARY] GET /api/status 200 5.123 ms - 128
+[SECONDARY] GET /api/public/data 304 2.123 ms - -
+[SECONDARY] GET /api/nonexistent 404 12.345 ms - 256
+[SECONDARY] GET /api/forbidden 403 5.678 ms - 64
+[SECONDARY] GET /api/internal-error 500 125.678 ms - 1024
+[SECONDARY] sending cached sheet public_talent_sheet:20494 page_1_limit_18
+[SECONDARY] TEAM ID 134
+[SECONDARY] Cache hit for key: user_session_abc123
+[SECONDARY] INFO: Application started successfully
+[SECONDARY] ERROR: Database connection failed
+[SECONDARY] FATAL: Critical system failure detected
+[SECONDARY] POST /api/auth/login 201 45.678 ms - 256
+[SECONDARY] GET /api/status 200 5.123 ms - 128
+[SECONDARY] GET /api/public/data 304 2.123 ms - -
+[SECONDARY] GET /api/nonexistent 404 12.345 ms - 256
+[SECONDARY] GET /api/forbidden 403 5.678 ms - 64
+[SECONDARY] GET /api/internal-error 500 125.678 ms - 1024
+[SECONDARY] sending cached sheet public_talent_sheet:20494 page_1_limit_18
+[SECONDARY] TEAM ID 134
+[SECONDARY] Cache hit for key: user_session_abc123
+[SECONDARY] INFO: Application started successfully
+[SECONDARY] ERROR: Database connection failed
+[SECONDARY] FATAL: Critical system failure detected
+[SECONDARY] POST /api/auth/login 201 45.678 ms - 256
+[SECONDARY] GET /api/status 200 5.123 ms - 128
+[SECONDARY] GET /api/public/data 304 2.123 ms - -
+[SECONDARY] GET /api/nonexistent 404 12.345 ms - 256
+[SECONDARY] GET /api/forbidden 403 5.678 ms - 64
+[SECONDARY] GET /api/internal-error 500 125.678 ms - 1024
+[SECONDARY] sending cached sheet public_talent_sheet:20494 page_1_limit_18
+[SECONDARY] TEAM ID 134
+[SECONDARY] Cache hit for key: user_session_abc123
+[SECONDARY] INFO: Application started successfully
+[SECONDARY] ERROR: Database connection failed
+[SECONDARY] FATAL: Critical system failure detected
+[SECONDARY] POST /api/auth/login 201 45.678 ms - 256
+[SECONDARY] GET /api/status 200 5.123 ms - 128
+[SECONDARY] GET /api/public/data 304 2.123 ms - -
+[SECONDARY] GET /api/nonexistent 404 12.345 ms - 256
+[SECONDARY] GET /api/forbidden 403 5.678 ms - 64
+[SECONDARY] GET /api/internal-error 500 125.678 ms - 1024
+[SECONDARY] sending cached sheet public_talent_sheet:20494 page_1_limit_18
+[SECONDARY] TEAM ID 134
+[SECONDARY] Cache hit for key: user_session_abc123
+[SECONDARY] INFO: Application started successfully
+[SECONDARY] ERROR: Database connection failed
+[SECONDARY] FATAL: Critical system failure detected
+[SECONDARY] POST /api/auth/login 201 45.678 ms - 256
+[SECONDARY] GET /api/status 200 5.123 ms - 128
+[SECONDARY] GET /api/public/data 304 2.123 ms - -
+[SECONDARY] GET /api/nonexistent 404 12.345 ms - 256
+[SECONDARY] GET /api/forbidden 403 5.678 ms - 64
+[SECONDARY] GET /api/internal-error 500 125.678 ms - 1024
+[SECONDARY] sending cached sheet public_talent_sheet:20494 page_1_limit_18

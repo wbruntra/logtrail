@@ -1,0 +1,68 @@
+# Agent Configuration
+mode: agent
+
+# Agent identity
+agent:
+  id: "${AGENT_ID}"
+  name: "${AGENT_NAME}"
+  description: "${AGENT_DESCRIPTION}"
+  type: "${SYSTEM_TYPE:-generic}"
+  environment: "${ENVIRONMENT:-production}"
+  datacenter: "${DATACENTER:-unknown}"
+
+# Central server connection
+central_server:
+  url: "${CENTRAL_SERVER_URL}"
+  api_key: "${AGENT_API_KEY}"
+  reconnect_interval: 5000
+  ping_interval: 30000
+  connection_timeout: 10000
+
+# Local server settings (for health checks)
+server:
+  port: 3001
+  host: "127.0.0.1"  # Agents typically don't need external access
+  
+# Log files this agent monitors
+logs:
+  - name: "System Log"
+    path: "/var/log/syslog"
+    description: "System log file"
+    enabled: true
+    
+  - name: "Application Log"
+    path: "/var/log/myapp/application.log"
+    description: "Main application log"
+    enabled: true
+    
+  - name: "Error Log"
+    path: "/var/log/myapp/error.log"
+    description: "Application error log"
+    enabled: true
+
+# Features
+features:
+  enable_search: true
+  enable_history: true
+  enable_real_time: true
+  
+# Performance settings
+performance:
+  max_log_lines: 1000
+  tail_lines: 100
+  search_limit: 10000
+  
+# Health monitoring
+health:
+  check_interval: 60000
+  report_system_metrics: true
+  
+# Security
+security:
+  allowed_paths:
+    - "/var/log/*"
+    - "/app/logs/*"
+    - "./logs/*"
+  denied_paths:
+    - "/var/log/auth.log"
+    - "/var/log/secure"

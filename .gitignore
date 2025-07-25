@@ -23,6 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
-*\.local*
+*.local*
 secrets.js
   
+logtrail.config.yaml
+.env

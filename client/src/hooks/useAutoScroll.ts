@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react'
+import type { LogLine } from '../types/logTypes'
 
 interface UseAutoScrollReturn {
   autoScroll: boolean
@@ -14,7 +15,7 @@ interface UseAutoScrollReturn {
 }
 
 export const useAutoScroll = (
-  logs: string[]
+  logs: LogLine[]
 ): UseAutoScrollReturn => {
   const [autoScroll, setAutoScroll] = useState(true)
   const containerRef = useRef<HTMLDivElement | null>(null)

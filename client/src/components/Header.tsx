@@ -1,14 +1,35 @@
 import React from 'react'
 import type { LogFile } from '../types/logTypes'
 import { useUser } from '../UserContext'
+import SearchBar from './SearchBar'
 
 interface HeaderProps {
   logFiles: LogFile[]
   selectedLog: string
   onLogChange: (logPath: string) => void
+  searchQuery: string
+  onSearchChange: (query: string) => void
+  onClearSearch: () => void
+  isSearching: boolean
+  matchCount: number
+  totalCount: number
+  onBackendSearch: (query: string) => Promise<void>
+  backendSearchLoading: boolean
 }
 
-const Header: React.FC<HeaderProps> = ({ logFiles, selectedLog, onLogChange }) => {
+const Header: React.FC<HeaderProps> = ({ 
+  logFiles, 
+  selectedLog, 
+  onLogChange,
+  searchQuery,
+  onSearchChange,
+  onClearSearch,
+  isSearching,
+  matchCount,
+  totalCount,
+  onBackendSearch,
+  backendSearchLoading
+}) => {
   const { setUser } = useUser()
 
   const handleLogout = async () => {
@@ -55,6 +76,17 @@ const Header: React.FC<HeaderProps> = ({ logFiles, selectedLog, onLogChange }) =
             ))}
           </select>
         </div>
+        
+        <SearchBar
+          searchQuery={searchQuery}
+          onSearchChange={onSearchChange}
+          onClearSearch={onClearSearch}
+          isSearching={isSearching}
+          matchCount={matchCount}
+          totalCount={totalCount}
+          onBackendSearch={onBackendSearch}
+          backendSearchLoading={backendSearchLoading}
+        />
       </div>
     </header>
   )

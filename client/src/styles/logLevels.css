@@ -1,0 +1,208 @@
+/* Log Level Styling */
+
+/* Line numbers */
+.log-line-number {
+  display: inline-block;
+  width: 60px;
+  color: #6c757d;
+  font-size: 0.875rem;
+  margin-right: 10px;
+  text-align: right;
+  user-select: none;
+  font-family: 'Courier New', monospace;
+}
+
+/* Clickable log lines */
+.log-line-clickable {
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.log-line-clickable:hover {
+  background-color: rgba(0, 123, 255, 0.1);
+}
+
+/* Overall log line styling */
+.log-line-error {
+  border-left: 3px solid #dc3545;
+  background-color: rgba(220, 53, 69, 0.1);
+}
+
+.log-line-warning {
+  border-left: 3px solid #ffc107;
+  background-color: rgba(255, 193, 7, 0.1);
+}
+
+.log-line-success {
+  border-left: 3px solid #28a745;
+  background-color: rgba(40, 167, 69, 0.05);
+}
+
+.log-line-info {
+  border-left: 3px solid #17a2b8;
+  background-color: rgba(23, 162, 184, 0.05);
+}
+
+.log-line-debug {
+  border-left: 3px solid #6c757d;
+  background-color: rgba(108, 117, 125, 0.05);
+}
+
+.log-line-default {
+  border-left: 3px solid transparent;
+}
+
+/* HTTP Status Code styling */
+.log-status-success {
+  color: #28a745;
+  font-weight: 600;
+  background-color: rgba(40, 167, 69, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.log-status-info {
+  color: #17a2b8;
+  font-weight: 600;
+  background-color: rgba(23, 162, 184, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.log-status-warning {
+  color: #ffc107;
+  font-weight: 600;
+  background-color: rgba(255, 193, 7, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.log-status-error {
+  color: #dc3545;
+  font-weight: 600;
+  background-color: rgba(220, 53, 69, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.log-status-default {
+  color: #6c757d;
+  font-weight: 600;
+}
+
+/* HTTP Method styling */
+.log-http-method {
+  color: #007bff;
+  font-weight: 600;
+  background-color: rgba(0, 123, 255, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+/* Log Level Keywords styling */
+.log-level-error {
+  color: #dc3545;
+  font-weight: 700;
+  text-transform: uppercase;
+  background-color: rgba(220, 53, 69, 0.15);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.log-level-warning {
+  color: #ffc107;
+  font-weight: 700;
+  text-transform: uppercase;
+  background-color: rgba(255, 193, 7, 0.15);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.log-level-info {
+  color: #17a2b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  background-color: rgba(23, 162, 184, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.log-level-debug {
+  color: #6c757d;
+  font-weight: 600;
+  text-transform: uppercase;
+  background-color: rgba(108, 117, 125, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.log-level-default {
+  color: #6c757d;
+  font-weight: 600;
+}
+
+/* Dark theme adjustments */
+[data-bs-theme="dark"] .log-line-error {
+  background-color: rgba(220, 53, 69, 0.15);
+}
+
+[data-bs-theme="dark"] .log-line-warning {
+  background-color: rgba(255, 193, 7, 0.15);
+}
+
+[data-bs-theme="dark"] .log-line-success {
+  background-color: rgba(40, 167, 69, 0.1);
+}
+
+[data-bs-theme="dark"] .log-line-info {
+  background-color: rgba(23, 162, 184, 0.1);
+}
+
+[data-bs-theme="dark"] .log-line-debug {
+  background-color: rgba(108, 117, 125, 0.1);
+}
+
+[data-bs-theme="dark"] .log-status-success {
+  color: #5cb85c;
+  background-color: rgba(92, 184, 92, 0.15);
+}
+
+[data-bs-theme="dark"] .log-status-info {
+  color: #5bc0de;
+  background-color: rgba(91, 192, 222, 0.15);
+}
+
+[data-bs-theme="dark"] .log-status-warning {
+  color: #f0ad4e;
+  background-color: rgba(240, 173, 78, 0.15);
+}
+
+[data-bs-theme="dark"] .log-status-error {
+  color: #d9534f;
+  background-color: rgba(217, 83, 79, 0.15);
+}
+
+[data-bs-theme="dark"] .log-http-method {
+  color: #5bc0de;
+  background-color: rgba(91, 192, 222, 0.15);
+}
+
+[data-bs-theme="dark"] .log-level-error {
+  color: #d9534f;
+  background-color: rgba(217, 83, 79, 0.2);
+}
+
+[data-bs-theme="dark"] .log-level-warning {
+  color: #f0ad4e;
+  background-color: rgba(240, 173, 78, 0.2);
+}
+
+[data-bs-theme="dark"] .log-level-info {
+  color: #5bc0de;
+  background-color: rgba(91, 192, 222, 0.15);
+}
+
+[data-bs-theme="dark"] .log-level-debug {
+  color: #999;
+  background-color: rgba(153, 153, 153, 0.15);
+}

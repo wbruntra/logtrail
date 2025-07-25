@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import type { LogLine } from '../types/logTypes'
 
 interface UseLogHistoryReturn {
   historyOffset: number | undefined
@@ -6,7 +7,7 @@ interface UseLogHistoryReturn {
   hasMoreHistory: boolean
   setHasMoreHistory: (hasMore: boolean) => void
   loadingHistory: boolean
-  loadMoreHistory: (selectedLog: string, setLogs: React.Dispatch<React.SetStateAction<string[]>>) => Promise<void>
+  loadMoreHistory: (selectedLog: string, setLogs: React.Dispatch<React.SetStateAction<LogLine[]>>) => Promise<void>
   resetHistory: () => void
   historyLoadLock: React.MutableRefObject<boolean>
 }
@@ -19,7 +20,7 @@ export const useLogHistory = (): UseLogHistoryReturn => {
 
   const loadMoreHistory = useCallback(async (
     selectedLog: string,
-    setLogs: React.Dispatch<React.SetStateAction<string[]>>
+    setLogs: React.Dispatch<React.SetStateAction<LogLine[]>>
   ) => {
     if (
       !selectedLog ||

@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import type { LogLine } from '../types/logTypes'
 
 interface UseLogStreamReturn {
-  logs: string[]
+  logs: LogLine[]
   eventSource: EventSource | null
   connectToLog: (logPath: string) => void
   disconnect: () => void
-  setLogs: React.Dispatch<React.SetStateAction<string[]>>
+  setLogs: React.Dispatch<React.SetStateAction<LogLine[]>>
 }
 
 export const useLogStream = (): UseLogStreamReturn => {
-  const [logs, setLogs] = useState<string[]>([])
+  const [logs, setLogs] = useState<LogLine[]>([])
   const [eventSource, setEventSource] = useState<EventSource | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
@@ -37,8 +38,8 @@ export const useLogStream = (): UseLogStreamReturn => {
     const es = new EventSource(`/api/logs/stream?file=${encodeURIComponent(logPath)}`)
     
     es.onmessage = (event) => {
-      const newLog = JSON.parse(event.data)
-      setLogs((prevLogs) => [...prevLogs, newLog])
+      const newLogLine: LogLine = JSON.parse(event.data)
+      setLogs((prevLogs) => [...prevLogs, newLogLine])
     }
     
     es.onerror = (err) => {

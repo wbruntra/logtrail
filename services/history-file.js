@@ -22,6 +22,7 @@ async function getLogHistory(filePath, beforeLine, limit = 100) {
         lines: [],
         hasMore: false,
         nextBefore: 0,
+        totalLines
       }
     }
 
@@ -35,10 +36,17 @@ async function getLogHistory(filePath, beforeLine, limit = 100) {
       lines.pop()
     }
 
+    // Create line objects with line numbers
+    const linesWithNumbers = lines.map((content, index) => ({
+      lineNumber: start + index,
+      content: content
+    }))
+
     return {
-      lines,
+      lines: linesWithNumbers,
       hasMore: start > 1,
       nextBefore: start,
+      totalLines
     }
   } catch (error) {
     // If the file doesn't exist or there's another error, throw a descriptive error
