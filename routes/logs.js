@@ -11,9 +11,8 @@ const { getAuthMiddleware } = require('../middleware/auth')
 
 const execAsync = promisify(exec)
 
-// Use appropriate authentication middleware based on mode
+// Use authentication middleware
 const authMiddleware = getAuthMiddleware()
-
 router.use(authMiddleware)
 
 // Endpoint to get the last N lines of a log file

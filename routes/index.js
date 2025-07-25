@@ -8,14 +8,14 @@ router.get('/health', (req, res) => {
 })
 
 router.get('/status', (req, res) => {
-  if (req.session.authenticated) {
+  if (req.session && req.session.authenticated) {
     res.status(200).json({ status: 'Authenticated', authenticated: true })
   } else {
     res.status(200).json({ status: 'Unauthenticated', authenticated: false })
   }
 })
 
-// add a login endpoint
+// Login endpoint
 router.post('/login', (req, res) => {
   const { password } = req.body
   if (password === secrets.password) {
@@ -26,6 +26,7 @@ router.post('/login', (req, res) => {
   }
 })
 
+// Logout endpoint
 router.get('/logout', (req, res) => {
   req.session = null // Clear the session
   res.status(200).json({ message: 'Logged out successfully', authenticated: false })

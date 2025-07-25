@@ -23,9 +23,22 @@ dist-ssr
 *.sln
 *.sw?
 
-*.local*
+*\.local*
 secrets.js
   
+# Configuration files (keep templates, ignore actual configs)
 logtrail.config.yaml
+.env
+.env.local
+.env.production
+.env.staging
+
+# Keep templates
+!.env.*.template
+!.env.example
+
+# PM2 logs and ecosystem files (if using different names)
+ecosystem.config.js.local
+pm2.json
 .env
 ecosystem.config.js
