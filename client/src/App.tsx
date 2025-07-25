@@ -1,5 +1,8 @@
 import { useEffect, useCallback, useState } from 'react'
+import { Modal } from 'react-bootstrap'
 import './App.scss'
+import './styles/ansiColors.css'
+import './styles/modals.css'
 import Header from './components/Header'
 import LogViewer from './components/LogViewer'
 import SearchResults from './components/SearchResults'
@@ -9,6 +12,7 @@ import { useLogHistory } from './hooks/useLogHistory'
 import { useAutoScroll } from './hooks/useAutoScroll'
 import { useLogSearch } from './hooks/useLogSearch'
 import { useBackendSearch } from './hooks/useBackendSearch'
+import { parseLogLine, getLogLineClass } from './utils/logParser'
 import type { LogLine } from './types/logTypes'
 
 function App() {
@@ -163,54 +167,62 @@ function App() {
         />
       </div>
       
-      {showSearchResults && (
-        <SearchResults
-          results={searchResults}
-          query={searchQuery}
-          isLoading={isBackendSearching}
-          onLineClick={handleSearchResultClick}
-          onClose={handleCloseSearchResults}
-        />
-      )}
+      <SearchResults
+        results={searchResults}
+        query={searchQuery}
+        isLoading={isBackendSearching}
+        onLineClick={handleSearchResultClick}
+        onClose={handleCloseSearchResults}
+        show={showSearchResults}
+      />
       
-      {(contextData || isLoadingContext) && (
-        <div className="context-overlay">
-          <div className="context-panel">
-            <div className="context-header">
-              <h5>
-                {isLoadingContext ? 'Loading Context...' : `Context for Line ${contextData?.targetLine}`}
-              </h5>
-              <button
-                className="btn btn-sm btn-outline-secondary"
-                onClick={() => clearContext()}
-              >
-                Close
-              </button>
+      <Modal 
+        show={!!(contextData || isLoadingContext)} 
+        onHide={clearContext}
+        size="lg"
+        centered
+        dialogClassName="context-modal"
+        data-bs-theme="dark"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {isLoadingContext ? 'Loading Context...' : `Context for Line ${contextData?.targetLine}`}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {isLoadingContext ? (
+            <div className="text-center p-3">
+              <div className="spinner-border" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
             </div>
-            <div className="context-content">
-              {isLoadingContext ? (
-                <div className="text-center p-3">
-                  <div className="spinner-border" role="status">
-                    <span className="visually-hidden">Loading...</span>
+          ) : (
+            <pre className="context-content">
+              {contextData?.lines.map((line, index) => {
+                const parsedLine = parseLogLine(line.content)
+                return (
+                  <div 
+                    key={index}
+                    className={`context-line ${line.isTarget ? 'target-line' : ''} ${getLogLineClass(parsedLine.level)}`}
+                  >
+                    <span className="context-line-number">{line.lineNumber}</span>
+                    <span className="log-content">
+                      {parsedLine.segments.map((segment, segIndex) => (
+                        <span 
+                          key={segIndex}
+                          className={segment.className}
+                        >
+                          {segment.text}
+                        </span>
+                      ))}
+                    </span>
                   </div>
-                </div>
-              ) : (
-                <pre>
-                  {contextData?.lines.map((line, index) => (
-                    <div 
-                      key={index}
-                      className={`context-line ${line.isTarget ? 'target-line' : ''}`}
-                    >
-                      <span className="context-line-number">{line.lineNumber}</span>
-                      {line.content}
-                    </div>
-                  ))}
-                </pre>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+                )
+              })}
+            </pre>
+          )}
+        </Modal.Body>
+      </Modal>
     </div>
   )
 }

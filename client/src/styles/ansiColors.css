@@ -1,0 +1,45 @@
+/* ANSI Color Classes */
+/* Standard colors */
+.ansi-black { color: #000000; }
+.ansi-red { color: #cd0000; }
+.ansi-green { color: #00cd00; }
+.ansi-yellow { color: #cdcd00; }
+.ansi-blue { color: #0000ee; }
+.ansi-magenta { color: #cd00cd; }
+.ansi-cyan { color: #00cdcd; }
+.ansi-white { color: #e5e5e5; }
+
+/* Bright colors */
+.ansi-bright-black { color: #7f7f7f; }
+.ansi-bright-red { color: #ff0000; }
+.ansi-bright-green { color: #00ff00; }
+.ansi-bright-yellow { color: #ffff00; }
+.ansi-bright-blue { color: #5c5cff; }
+.ansi-bright-magenta { color: #ff00ff; }
+.ansi-bright-cyan { color: #00ffff; }
+.ansi-bright-white { color: #ffffff; }
+
+/* Common ANSI color combinations for HTTP status codes */
+.ansi-green,
+.ansi-bright-green {
+  /* Green is typically used for 2xx status codes (success) */
+  font-weight: 500;
+}
+
+.ansi-cyan,
+.ansi-bright-cyan {
+  /* Cyan is typically used for 3xx status codes (redirection) */
+  font-weight: 500;
+}
+
+.ansi-yellow,
+.ansi-bright-yellow {
+  /* Yellow is typically used for 4xx status codes (client error) */
+  font-weight: 500;
+}
+
+.ansi-red,
+.ansi-bright-red {
+  /* Red is typically used for 5xx status codes (server error) */
+  font-weight: 600;
+}

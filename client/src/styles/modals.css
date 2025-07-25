@@ -1,0 +1,123 @@
+/* React Bootstrap Modal Customizations for Dark Theme */
+
+/* Context Modal Customizations */
+.modal-dialog.modal-lg.context-modal {
+  max-width: 1200px;
+  width: 90vw;
+}
+
+.modal-dialog.context-modal .modal-content {
+  background-color: var(--bs-tertiary-bg, #23272b);
+  border: 1px solid var(--bs-border-color, #495057);
+  border-radius: 0.5rem;
+  max-height: 80vh;
+}
+
+.modal-dialog.context-modal .modal-header {
+  background-color: var(--bs-tertiary-bg, #23272b);
+  border-bottom: 1px solid var(--bs-border-color, #495057);
+  color: var(--bs-body-color, #f8f9fa);
+}
+
+.modal-dialog.context-modal .modal-title {
+  color: var(--bs-body-color, #f8f9fa);
+}
+
+.modal-dialog.context-modal .modal-body {
+  background-color: var(--bs-tertiary-bg, #23272b);
+  color: var(--bs-body-color, #f8f9fa);
+  padding: 1rem;
+  overflow: auto;
+  max-height: calc(80vh - 120px); /* Account for header */
+}
+
+.modal-dialog.context-modal .modal-body .context-content {
+  font-family: monospace;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin: 0;
+  padding: 0;
+}
+
+.modal-dialog.context-modal .btn-close {
+  filter: invert(1);
+}
+
+/* Search Results Modal Customizations */
+.modal-dialog.modal-lg.search-modal {
+  max-width: 1200px;
+  width: 90vw;
+}
+
+.modal-dialog.search-modal .modal-content {
+  background-color: var(--bs-tertiary-bg, #23272b);
+  border: 1px solid var(--bs-border-color, #495057);
+  border-radius: 8px;
+  max-height: 80vh;
+}
+
+.modal-dialog.search-modal .modal-header {
+  background-color: var(--bs-tertiary-bg, #23272b);
+  border-bottom: 1px solid var(--bs-border-color, #495057);
+  color: var(--bs-body-color, #f8f9fa);
+}
+
+.modal-dialog.search-modal .modal-title {
+  color: var(--bs-body-color, #f8f9fa);
+}
+
+.modal-dialog.search-modal .modal-body {
+  background-color: var(--bs-tertiary-bg, #23272b);
+  color: var(--bs-body-color, #f8f9fa);
+  padding: 1rem;
+  overflow-y: auto;
+  max-height: calc(80vh - 120px); /* Account for header */
+}
+
+.modal-dialog.search-modal .btn-close {
+  filter: invert(1);
+}
+
+/* Modal backdrop customization */
+.modal-backdrop {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Search results list styling within modal */
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.search-result-item {
+  padding: 0.75rem;
+  border: 1px solid var(--bs-border-color, #495057);
+  border-radius: 4px;
+  background-color: var(--bs-tertiary-bg, #23272b);
+  transition: background-color 0.1s ease;
+}
+
+.search-result-item.clickable {
+  cursor: pointer;
+}
+
+.search-result-item.clickable:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.search-result-line-number {
+  font-size: 0.875rem;
+  color: #6c757d;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  min-width: 5ch;
+  text-align: left;
+}
+
+.search-result-content {
+  font-family: monospace;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--bs-body-color, #f8f9fa);
+}
