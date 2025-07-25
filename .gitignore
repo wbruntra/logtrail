@@ -28,3 +28,4 @@ secrets.js
   
 logtrail.config.yaml
 .env
+ecosystem.config.js
