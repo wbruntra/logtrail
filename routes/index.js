@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const secrets = require('../secrets') 
+const secrets = require('../secrets')
 
 // Keep original health check at root level
 router.get('/health', (req, res) => {
@@ -24,6 +24,11 @@ router.post('/login', (req, res) => {
   } else {
     res.status(401).json({ error: 'Invalid password', authenticated: false })
   }
+})
+
+router.get('/logout', (req, res) => {
+  req.session = null // Clear the session
+  res.status(200).json({ message: 'Logged out successfully', authenticated: false })
 })
 
 module.exports = router
