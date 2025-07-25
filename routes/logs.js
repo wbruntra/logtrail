@@ -8,7 +8,6 @@ const { tailFile } = require('../services/tail-file')
 
 // Middleware to check authentication
 const requireLogin = (req, res, next) => {
-  console.log('Session', req.session)
   if (req.session.authenticated) {
     next()
   } else {
