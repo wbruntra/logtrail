@@ -26,7 +26,6 @@ const LogViewer: React.FC<LogViewerProps> = ({
   onScroll,
   loadingHistory,
   containerRef,
-  searchQuery = '',
   debouncedQuery = '',
   onLineClick
 }) => {
