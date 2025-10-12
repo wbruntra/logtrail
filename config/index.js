@@ -1,6 +1,5 @@
 const path = require('path')
 const fs = require('fs')
-const yaml = require('js-yaml')
 
 class ConfigManager {
   constructor() {
@@ -33,7 +32,7 @@ class ConfigManager {
       }
 
       const configFile = fs.readFileSync(configPath, 'utf8')
-      this.config = yaml.load(configFile)
+      this.config = Bun.YAML.parse(configFile)
       
       // Substitute environment variables
       this.config = this.substituteEnvVars(this.config)
