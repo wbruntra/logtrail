@@ -80,6 +80,7 @@ router.get('/stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no') // Disable nginx buffering
   res.flushHeaders()
 
   const fileWatcher = new FileWatcher(absPath)
@@ -88,10 +89,15 @@ router.get('/stream', (req, res) => {
   }
   fileWatcher.on('data', sendLogData)
 
-  req.on('close', () => {
+  // Handle client disconnect and errors
+  const cleanup = () => {
     fileWatcher.removeListener('data', sendLogData)
-    fileWatcher.removeAllListeners()
-  })
+    fileWatcher.close() // Properly close the watcher
+  }
+
+  req.on('close', cleanup)
+  req.on('error', cleanup)
+  res.on('error', cleanup)
 })
 
 // Search endpoint for log file content
