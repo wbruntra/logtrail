@@ -1,6 +1,5 @@
 const express = require('express')
 const logger = require('morgan')
-const path = require('path')
 const cookieSession = require('cookie-session')
 const secrets = require('./secrets') // Using existing secrets file
 
@@ -33,6 +32,5 @@ app.use('/api', appRouter)
 
 const logsRouter = require('./routes/logs.js')
 app.use('/api/logs', logsRouter)
-
 
 module.exports = app

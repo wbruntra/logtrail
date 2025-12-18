@@ -4,9 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "jest",
-    "dev": "nodemon bin/www",
-    "start": "node bin/www"
+    "dev": "bun --watch bin/www",
+    "start": "bun bin/www"
   },
   "keywords": [],
   "author": "",
@@ -16,9 +15,7 @@
     "cookie-session": "^2.1.1",
     "cors": "^2.8.5",
     "express": "^5.1.0",
-    "jest": "^30.0.5",
     "morgan": "^1.10.1",
-    "nodemon": "^3.1.10",
     "supertest": "^7.1.4",
     "tail-stream": "^0.3.4"
   }
