@@ -20,10 +20,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ password }),
       })
       const data = await res.json()
       if (res.ok && data.authenticated) {
+        localStorage.setItem('token', data.token)
         setUser({ username: 'user', authenticated: true })
         if (onLoginSuccess) onLoginSuccess()
       } else {
@@ -41,14 +42,16 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
       <h2 className="mb-4">Log in to Logtrail</h2>
       <form onSubmit={handleSubmit}>
         <div className="mb-3">
-          <label htmlFor="password" className="form-label">Password</label>
+          <label htmlFor="password" className="form-label">
+            Password
+          </label>
           <input
             type="password"
             className="form-control"
             id="password"
             placeholder="Password"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             disabled={loading}
             autoFocus
             required
@@ -61,6 +64,6 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
       </form>
     </div>
   )
-};
+}
 
-export default LoginForm;
+export default LoginForm

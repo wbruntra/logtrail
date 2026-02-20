@@ -85,9 +85,16 @@ router.get('/stream', (c) => {
     }
     fileWatcher.on('data', sendLogData)
 
+    // Send a heartbeat every 15 seconds to keep intermediate proxies/load balancers alive
+    const heartbeatInterval = setInterval(() => {
+      // Sending an event named 'ping' won't trigger the client's default onmessage handler
+      stream.writeSSE({ event: 'ping', data: 'heartbeat' })
+    }, 15000)
+
     // Keep alive until client disconnects
     await new Promise((resolve) => {
       stream.onAbort(() => {
+        clearInterval(heartbeatInterval)
         fileWatcher.removeListener('data', sendLogData)
         fileWatcher.close()
         resolve()
@@ -126,7 +133,10 @@ router.get('/search', async (c) => {
 
     if (isRegex) {
       const flags = isCaseSensitive ? '' : '-i'
-      grepCommand = `grep -n ${flags} -E "${query.replace(/"/g, '\\"')}" "${absPath}" | head -n ${maxResults}`
+      grepCommand = `grep -n ${flags} -E "${query.replace(
+        /"/g,
+        '\\"',
+      )}" "${absPath}" | head -n ${maxResults}`
     } else {
       const flags = isCaseSensitive ? '' : '-i'
       const escapedQuery = query.replace(/'/g, "'\"'\"'")
@@ -134,7 +144,10 @@ router.get('/search', async (c) => {
     }
 
     const { stdout } = await execAsync(grepCommand)
-    const lines = stdout.trim().split('\n').filter((line) => line)
+    const lines = stdout
+      .trim()
+      .split('\n')
+      .filter((line) => line)
 
     // Parse grep output (format: lineNumber:content)
     const results = lines
@@ -223,7 +236,14 @@ router.get('/context/:lineNumber', async (c) => {
       isTarget: startLine + index === targetLine,
     }))
 
-    return c.json({ targetLine, contextLines, startLine, endLine, totalLines, lines: contextResult })
+    return c.json({
+      targetLine,
+      contextLines,
+      startLine,
+      endLine,
+      totalLines,
+      lines: contextResult,
+    })
   } catch (error) {
     console.error('Context error:', error)
     return c.json({ error: 'Failed to get context', details: error.message }, 500)

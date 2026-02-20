@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "bun run --concurrently backend client",
+    "dev": "bun run --parallel backend client",
     "backend": "bun --watch hono-app/bin/www",
     "client": "cd client && bun run dev",
     "start": "bun bin/www"
