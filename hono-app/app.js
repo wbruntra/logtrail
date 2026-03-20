@@ -1,12 +1,12 @@
 const { Hono } = require('hono')
-const customLogger = require('./middleware/customLogger').default
+const { createLogger } = require('./middleware/customLogger')
 
 const app = new Hono()
 
 console.log('Starting logtrail application')
 
 // Middleware for logging requests
-app.use('*', customLogger)
+app.use('*', createLogger())
 
 // Mount the API routes
 const appRouter = require('./routes/index.js')

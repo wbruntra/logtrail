@@ -1,31 +1,56 @@
-export default async (c, next) => {
-  const start = Date.now()
-  const method = c.req.method
-  const urlObj = new URL(c.req.url)
-  const url = urlObj.pathname + (urlObj.search || '')
+import type { Context, Next } from 'hono'
 
-  await next()
+interface LoggerConfig {
+  ignoredPaths?: string[]
+  ignoredPatterns?: RegExp[]
+  getUserId?: (c: Context) => string | undefined
+}
 
-  const status = c.res.status || 0
-  const time = Date.now() - start
-  const user_id = c.get('user_id') as any
+const RESET = '\x1b[0m'
+const METHOD_COLOR: Record<string, string> = {
+  GET: '\x1b[34m',
+  POST: '\x1b[35m',
+  PUT: '\x1b[33m',
+  PATCH: '\x1b[33m',
+  DELETE: '\x1b[31m',
+}
 
-  // ANSI color helpers
-  const RESET = '\u001b[0m'
-  const colorStatus = (s: number) =>
-    s >= 500 ? '\u001b[31m' : s >= 400 ? '\u001b[33m' : s >= 300 ? '\u001b[36m' : '\u001b[32m'
-  const colorMethod = (m: string) =>
-    m === 'GET'
-      ? '\u001b[34m'
-      : m === 'POST'
-      ? '\u001b[35m'
-      : m === 'PUT'
-      ? '\u001b[33m'
-      : '\u001b[36m'
+const statusColor = (s: number): string =>
+  s >= 500 ? '\x1b[31m' : s >= 400 ? '\x1b[33m' : s >= 300 ? '\x1b[36m' : '\x1b[32m'
 
-  const methodStr = `${colorMethod(method)}${method}${RESET}`
-  const statusStr = `${colorStatus(status)}${status}${RESET}`
-  const userStr = user_id ? ` user=${user_id}` : ''
+export function createLogger(config: LoggerConfig = {}) {
+  const { ignoredPaths = [], ignoredPatterns = [], getUserId } = config
 
-  console.log(`${methodStr} ${url} ${statusStr} ${time}ms${userStr}`)
+  return async (c: Context, next: Next) => {
+    const start = Date.now()
+    const { pathname, search } = new URL(c.req.url)
+
+    if (
+      ignoredPaths.some((p) => pathname.startsWith(p)) ||
+      ignoredPatterns.some((r) => r.test(pathname))
+    ) {
+      return next()
+    }
+
+    await next()
+
+    const method = c.req.method
+    const status = c.res.status
+    const ms = Date.now() - start
+    const userId = getUserId?.(c)
+    const ts = new Date().toTimeString().slice(0, 8)
+
+    const parts = [
+      `[${ts}]`,
+      `${METHOD_COLOR[method] ?? '\x1b[36m'}${method}${RESET}`,
+      `${pathname}${search}`,
+      `${statusColor(status)}${status}${RESET}`,
+      `${ms}ms`,
+      userId ? `user=${userId}` : null,
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    console.log(parts)
+  }
 }
