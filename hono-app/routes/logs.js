@@ -8,9 +8,11 @@ const { tailFile } = require('@/services/tail-file')
 const {
   listApps,
   getTodayFile,
+  getAllLines,
   getIngestedHistory,
   searchIngested,
   getIngestedContext,
+  ingestEmitter,
 } = require('@/services/ingest-store')
 const { exec } = require('child_process')
 const { promisify } = require('util')
@@ -111,24 +113,41 @@ router.get('/list', (c) => {
 router.get('/stream', (c) => {
   const fileParam = c.req.query('file')
 
-  const appName = parseIngested(fileParam)
-  const absPath = (() => {
-    if (appName !== null) {
-      return getTodayFile(appName)
-    }
-    const logs = getLogConfig()
-    const logEntry = logs.find((l) => l.path === fileParam)
-    if (!logEntry) return null
-    return path.isAbsolute(logEntry.path)
-      ? logEntry.path
-      : path.join(process.cwd(), logEntry.path)
-  })()
+  c.header('X-Accel-Buffering', 'no') // Disable nginx buffering
 
-  if (!absPath) {
-    return c.json({ error: 'Invalid log file' }, 400)
+  const appName = parseIngested(fileParam)
+
+  // Ingested logs: subscribe to the in-process EventEmitter instead of file watching.
+  // appendFileSync writes don't reliably trigger fs.watch events in Bun.
+  if (appName !== null) {
+    return streamSSE(c, async (stream) => {
+      const handler = (data) => {
+        stream.writeSSE({ data: JSON.stringify(data) })
+      }
+      ingestEmitter.on(`data:${appName}`, handler)
+
+      const heartbeatInterval = setInterval(() => {
+        stream.writeSSE({ event: 'ping', data: 'heartbeat' })
+      }, 15000)
+
+      await new Promise((resolve) => {
+        stream.onAbort(() => {
+          clearInterval(heartbeatInterval)
+          ingestEmitter.off(`data:${appName}`, handler)
+          resolve()
+        })
+      })
+    })
   }
 
-  c.header('X-Accel-Buffering', 'no') // Disable nginx buffering
+  const logs = getLogConfig()
+  const logEntry = logs.find((l) => l.path === fileParam)
+  if (!logEntry) {
+    return c.json({ error: 'Invalid log file' }, 400)
+  }
+  const absPath = path.isAbsolute(logEntry.path)
+    ? logEntry.path
+    : path.join(process.cwd(), logEntry.path)
 
   return streamSSE(c, async (stream) => {
     const fileWatcher = new FileWatcher(absPath)

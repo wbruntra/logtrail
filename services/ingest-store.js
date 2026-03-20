@@ -1,8 +1,14 @@
 const fs = require('fs')
 const path = require('path')
+const EventEmitter = require('events')
 
 const STORE_DIR = path.join(process.cwd(), 'ingested-logs')
 const RETENTION_DAYS = 3
+
+// Real-time event bus for active SSE stream subscribers.
+// Emits 'data:<appName>' with { lineNumber, content } when new lines arrive.
+const ingestEmitter = new EventEmitter()
+ingestEmitter.setMaxListeners(100)
 
 function getDateStr(date = new Date()) {
   return date.toISOString().slice(0, 10)
@@ -28,15 +34,23 @@ function ensureAppDir(app) {
 function writeEntry(app, msg) {
   const ts = new Date().toISOString()
   ensureAppDir(app)
-  fs.appendFileSync(getTodayFile(app), `${ts} ${msg}\n`)
+  const totalLines = getAllLines(app).length
+  const content = `${ts} ${msg}`
+  fs.appendFileSync(getTodayFile(app), content + '\n')
+  ingestEmitter.emit(`data:${app}`, { lineNumber: totalLines + 1, content })
   return ts
 }
 
 function writeBatch(app, messages) {
   if (!messages.length) return
   ensureAppDir(app)
-  const lines = messages.map((msg) => `${new Date().toISOString()} ${msg}`).join('\n') + '\n'
-  fs.appendFileSync(getTodayFile(app), lines)
+  const ts = new Date().toISOString()
+  const totalLines = getAllLines(app).length
+  const contentLines = messages.map((msg) => `${ts} ${msg}`)
+  fs.appendFileSync(getTodayFile(app), contentLines.join('\n') + '\n')
+  contentLines.forEach((content, i) => {
+    ingestEmitter.emit(`data:${app}`, { lineNumber: totalLines + i + 1, content })
+  })
 }
 
 function listApps() {
@@ -181,5 +195,6 @@ module.exports = {
   searchIngested,
   getIngestedContext,
   cleanupOldFiles,
+  ingestEmitter,
   STORE_DIR,
 }

@@ -17,15 +17,22 @@ export const useLogFiles = (): UseLogFilesReturn => {
 
   useEffect(() => {
     const token = localStorage.getItem('token')
+    const urlLog = new URLSearchParams(window.location.search).get('log')
+
     fetch('/api/logs/list', {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     })
       .then((res) => res.json())
       .then((data) => {
-        setLogFiles(data.logs || [])
-        if (data.logs && data.logs.length > 0) {
-          setSelectedLog(data.logs[0].path)
+        const logs: LogFile[] = data.logs || []
+        setLogFiles(logs)
+
+        if (logs.length > 0) {
+          // Restore from URL if the log still exists, otherwise use the first
+          const fromUrl = urlLog && logs.find((l) => l.path === urlLog)
+          setSelectedLog(fromUrl ? urlLog : logs[0].path)
         }
+
         setLoading(false)
       })
       .catch((err) => {
@@ -34,10 +41,17 @@ export const useLogFiles = (): UseLogFilesReturn => {
       })
   }, [])
 
+  const setSelectedLogAndUrl = (path: string) => {
+    setSelectedLog(path)
+    const params = new URLSearchParams(window.location.search)
+    params.set('log', path)
+    window.history.replaceState(null, '', `?${params.toString()}`)
+  }
+
   return {
     logFiles,
     selectedLog,
-    setSelectedLog,
+    setSelectedLog: setSelectedLogAndUrl,
     loading,
     error,
   }
