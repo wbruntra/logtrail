@@ -11,6 +11,7 @@
 
 ## Patterns That Work
 - For ingested logs, verify live updates with a dedicated script that starts the app, opens the SSE endpoint, posts an ingest payload, and asserts the streamed line arrives.
+- Native browser `EventSource` cannot send `Authorization` headers; use a fetch-based SSE client when stream auth must reuse bearer tokens from login.
 
 ## Patterns That Don't Work
 - Assuming an in-memory event emitter is enough for live updates when refresh/history reads from shared files.

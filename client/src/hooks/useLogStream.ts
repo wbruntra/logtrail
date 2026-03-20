@@ -1,70 +1,104 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { fetchEventSource, EventStreamContentType } from '@microsoft/fetch-event-source'
 import type { LogLine } from '../types/logTypes'
 
 interface UseLogStreamReturn {
   logs: LogLine[]
-  eventSource: EventSource | null
   connectToLog: (logPath: string) => void
   disconnect: () => void
   setLogs: React.Dispatch<React.SetStateAction<LogLine[]>>
 }
 
+class FatalStreamError extends Error {}
+
+class RetriableStreamError extends Error {}
+
 export const useLogStream = (): UseLogStreamReturn => {
   const [logs, setLogs] = useState<LogLine[]>([])
-  const [eventSource, setEventSource] = useState<EventSource | null>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
-
-  // Keep ref in sync with state
-  useEffect(() => {
-    eventSourceRef.current = eventSource
-  }, [eventSource])
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const disconnect = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      setEventSource(null)
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
     }
   }, [])
 
   const connectToLog = useCallback((logPath: string) => {
     // Close existing connection
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-    }
+    disconnect()
 
     if (!logPath) return
 
-    // Create new EventSource without clearing existing logs, with credentials to send cookies
-    const es = new EventSource(`/api/logs/stream?file=${encodeURIComponent(logPath)}`, {
-      withCredentials: true,
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+    const token = localStorage.getItem('token')
+
+    void fetchEventSource(`/api/logs/stream?file=${encodeURIComponent(logPath)}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      signal: abortController.signal,
+      async onopen(response) {
+        const contentType = response.headers.get('content-type')
+
+        if (response.ok && contentType?.includes(EventStreamContentType)) {
+          return
+        }
+
+        if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+          throw new FatalStreamError(`Stream request failed with HTTP ${response.status}`)
+        }
+
+        throw new RetriableStreamError(`Stream request failed with HTTP ${response.status}`)
+      },
+      onmessage(event) {
+        if (event.event === 'ping' || !event.data) return
+
+        const newLogLine: LogLine = JSON.parse(event.data)
+        setLogs((prevLogs) => [...prevLogs, newLogLine])
+      },
+      onclose() {
+        if (!abortController.signal.aborted) {
+          throw new RetriableStreamError('Stream closed unexpectedly')
+        }
+      },
+      onerror(err) {
+        if (abortController.signal.aborted) {
+          return
+        }
+
+        if (err instanceof FatalStreamError) {
+          console.error('Log stream authentication failed:', err)
+          throw err
+        }
+
+        console.error('Log stream temporarily interrupted:', err)
+      },
     })
-
-    es.onmessage = (event) => {
-      const newLogLine: LogLine = JSON.parse(event.data)
-      setLogs((prevLogs) => [...prevLogs, newLogLine])
-    }
-
-    es.onerror = (err) => {
-      console.error('EventSource failed:', err)
-      es.close()
-      setEventSource(null)
-    }
-
-    setEventSource(es)
-    eventSourceRef.current = es
-  }, [])
+      .catch((error) => {
+        if (!abortController.signal.aborted) {
+          console.error('Failed to connect to log stream:', error)
+        }
+      })
+      .finally(() => {
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null
+        }
+      })
+  }, [disconnect])
 
   useEffect(() => {
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-      }
+      disconnect()
     }
-  }, [])
+  }, [disconnect])
 
   return {
     logs,
-    eventSource,
     connectToLog,
     disconnect,
     setLogs,

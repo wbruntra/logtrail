@@ -33,11 +33,17 @@ const Header: React.FC<HeaderProps> = ({
   const { logout } = useUser()
 
   const handleLogout = async () => {
+    const token = localStorage.getItem('token')
+
     try {
-      localStorage.removeItem('token')
       const response = await fetch('/api/logout', {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         credentials: 'include',
       })
+
+      localStorage.removeItem('token')
 
       if (response.ok) {
         logout() // This will trigger the Controller to show the login form
@@ -45,6 +51,7 @@ const Header: React.FC<HeaderProps> = ({
         console.error('Logout failed')
       }
     } catch (error) {
+      localStorage.removeItem('token')
       console.error('Error during logout:', error)
     }
   }

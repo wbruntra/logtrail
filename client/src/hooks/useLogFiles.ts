@@ -21,6 +21,7 @@ export const useLogFiles = (): UseLogFilesReturn => {
 
     fetch('/api/logs/list', {
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      credentials: 'include',
     })
       .then((res) => res.json())
       .then((data) => {
