@@ -37,7 +37,7 @@ function writeEntry(app, msg) {
   const totalLines = getAllLines(app).length
   const content = `${ts} ${msg}`
   fs.appendFileSync(getTodayFile(app), content + '\n')
-  ingestEmitter.emit(`data:${app}`, { lineNumber: totalLines + 1, content })
+  ingestEmitter.emit(`data:${sanitizeApp(app)}`, { lineNumber: totalLines + 1, content })
   return ts
 }
 
@@ -49,7 +49,7 @@ function writeBatch(app, messages) {
   const contentLines = messages.map((msg) => `${ts} ${msg}`)
   fs.appendFileSync(getTodayFile(app), contentLines.join('\n') + '\n')
   contentLines.forEach((content, i) => {
-    ingestEmitter.emit(`data:${app}`, { lineNumber: totalLines + i + 1, content })
+    ingestEmitter.emit(`data:${sanitizeApp(app)}`, { lineNumber: totalLines + i + 1, content })
   })
 }
 

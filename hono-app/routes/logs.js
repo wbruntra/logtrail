@@ -8,11 +8,9 @@ const { tailFile } = require('@/services/tail-file')
 const {
   listApps,
   getTodayFile,
-  getAllLines,
   getIngestedHistory,
   searchIngested,
   getIngestedContext,
-  ingestEmitter,
 } = require('@/services/ingest-store')
 const { exec } = require('child_process')
 const { promisify } = require('util')
@@ -117,14 +115,18 @@ router.get('/stream', (c) => {
 
   const appName = parseIngested(fileParam)
 
-  // Ingested logs: subscribe to the in-process EventEmitter instead of file watching.
-  // appendFileSync writes don't reliably trigger fs.watch events in Bun.
+  // Ingested logs are written to disk and later read from disk during refresh/history requests.
+  // Stream from the underlying file as well so live updates work even when ingest requests and
+  // browser SSE connections are handled by different processes.
   if (appName !== null) {
+    const todayFile = getTodayFile(appName)
+
     return streamSSE(c, async (stream) => {
-      const handler = (data) => {
+      const fileWatcher = new FileWatcher(todayFile)
+      const sendLogData = (data) => {
         stream.writeSSE({ data: JSON.stringify(data) })
       }
-      ingestEmitter.on(`data:${appName}`, handler)
+      fileWatcher.on('data', sendLogData)
 
       const heartbeatInterval = setInterval(() => {
         stream.writeSSE({ event: 'ping', data: 'heartbeat' })
@@ -133,7 +135,8 @@ router.get('/stream', (c) => {
       await new Promise((resolve) => {
         stream.onAbort(() => {
           clearInterval(heartbeatInterval)
-          ingestEmitter.off(`data:${appName}`, handler)
+          fileWatcher.removeListener('data', sendLogData)
+          fileWatcher.close()
           resolve()
         })
       })
