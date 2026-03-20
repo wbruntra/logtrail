@@ -16,7 +16,10 @@ export const useLogFiles = (): UseLogFilesReturn => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/logs/list')
+    const token = localStorage.getItem('token')
+    fetch('/api/logs/list', {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
       .then((res) => res.json())
       .then((data) => {
         setLogFiles(data.logs || [])
@@ -36,6 +39,6 @@ export const useLogFiles = (): UseLogFilesReturn => {
     selectedLog,
     setSelectedLog,
     loading,
-    error
+    error,
   }
 }

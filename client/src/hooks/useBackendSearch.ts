@@ -32,7 +32,11 @@ interface UseBackendSearchReturn {
   contextData: ContextResponse | null
   isSearching: boolean
   isLoadingContext: boolean
-  searchFile: (file: string, query: string, options?: { regex?: boolean; caseSensitive?: boolean }) => Promise<void>
+  searchFile: (
+    file: string,
+    query: string,
+    options?: { regex?: boolean; caseSensitive?: boolean },
+  ) => Promise<void>
   getContext: (file: string, lineNumber: number, contextLines?: number) => Promise<void>
   clearResults: () => void
   clearContext: () => void
@@ -44,69 +48,79 @@ export const useBackendSearch = (): UseBackendSearchReturn => {
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingContext, setIsLoadingContext] = useState(false)
 
-  const searchFile = useCallback(async (
-    file: string, 
-    query: string, 
-    options: { regex?: boolean; caseSensitive?: boolean } = {}
-  ) => {
-    if (!query.trim()) return
+  const searchFile = useCallback(
+    async (
+      file: string,
+      query: string,
+      options: { regex?: boolean; caseSensitive?: boolean } = {},
+    ) => {
+      if (!query.trim()) return
 
-    setIsSearching(true)
-    try {
-      const params = new URLSearchParams({
-        file,
-        query: query.trim(),
-        regex: options.regex ? 'true' : 'false',
-        caseSensitive: options.caseSensitive ? 'true' : 'false'
-      })
+      setIsSearching(true)
+      try {
+        const params = new URLSearchParams({
+          file,
+          query: query.trim(),
+          regex: options.regex ? 'true' : 'false',
+          caseSensitive: options.caseSensitive ? 'true' : 'false',
+        })
 
-      const response = await fetch(`/api/logs/search?${params}`, {
-        credentials: 'include'
-      })
+        const token = localStorage.getItem('token')
+        const response = await fetch(`/api/logs/search?${params}`, {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: 'include',
+        })
 
-      if (!response.ok) {
-        throw new Error(`Search failed: ${response.statusText}`)
+        if (!response.ok) {
+          throw new Error(`Search failed: ${response.statusText}`)
+        }
+
+        const data: SearchResponse = await response.json()
+        setSearchResults(data.results)
+      } catch (error) {
+        console.error('Search error:', error)
+        setSearchResults([])
+      } finally {
+        setIsSearching(false)
       }
+    },
+    [],
+  )
 
-      const data: SearchResponse = await response.json()
-      setSearchResults(data.results)
-    } catch (error) {
-      console.error('Search error:', error)
-      setSearchResults([])
-    } finally {
-      setIsSearching(false)
-    }
-  }, [])
+  const getContext = useCallback(
+    async (file: string, lineNumber: number, contextLines: number = 10) => {
+      setIsLoadingContext(true)
+      try {
+        const params = new URLSearchParams({
+          file,
+          context: contextLines.toString(),
+        })
 
-  const getContext = useCallback(async (
-    file: string, 
-    lineNumber: number, 
-    contextLines: number = 10
-  ) => {
-    setIsLoadingContext(true)
-    try {
-      const params = new URLSearchParams({
-        file,
-        context: contextLines.toString()
-      })
+        const token = localStorage.getItem('token')
+        const response = await fetch(`/api/logs/context/${lineNumber}?${params}`, {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: 'include',
+        })
 
-      const response = await fetch(`/api/logs/context/${lineNumber}?${params}`, {
-        credentials: 'include'
-      })
+        if (!response.ok) {
+          throw new Error(`Context fetch failed: ${response.statusText}`)
+        }
 
-      if (!response.ok) {
-        throw new Error(`Context fetch failed: ${response.statusText}`)
+        const data: ContextResponse = await response.json()
+        setContextData(data)
+      } catch (error) {
+        console.error('Context error:', error)
+        setContextData(null)
+      } finally {
+        setIsLoadingContext(false)
       }
-
-      const data: ContextResponse = await response.json()
-      setContextData(data)
-    } catch (error) {
-      console.error('Context error:', error)
-      setContextData(null)
-    } finally {
-      setIsLoadingContext(false)
-    }
-  }, [])
+    },
+    [],
+  )
 
   const clearResults = useCallback(() => {
     setSearchResults([])
@@ -124,6 +138,6 @@ export const useBackendSearch = (): UseBackendSearchReturn => {
     searchFile,
     getContext,
     clearResults,
-    clearContext
+    clearContext,
   }
 }

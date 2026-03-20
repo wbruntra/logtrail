@@ -34,20 +34,22 @@ export const useLogStream = (): UseLogStreamReturn => {
 
     if (!logPath) return
 
-    // Create new EventSource without clearing existing logs
-    const es = new EventSource(`/api/logs/stream?file=${encodeURIComponent(logPath)}`)
-    
+    // Create new EventSource without clearing existing logs, with credentials to send cookies
+    const es = new EventSource(`/api/logs/stream?file=${encodeURIComponent(logPath)}`, {
+      withCredentials: true,
+    })
+
     es.onmessage = (event) => {
       const newLogLine: LogLine = JSON.parse(event.data)
       setLogs((prevLogs) => [...prevLogs, newLogLine])
     }
-    
+
     es.onerror = (err) => {
       console.error('EventSource failed:', err)
       es.close()
       setEventSource(null)
     }
-    
+
     setEventSource(es)
     eventSourceRef.current = es
   }, [])
@@ -65,6 +67,6 @@ export const useLogStream = (): UseLogStreamReturn => {
     eventSource,
     connectToLog,
     disconnect,
-    setLogs
+    setLogs,
   }
 }

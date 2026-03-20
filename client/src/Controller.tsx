@@ -8,9 +8,15 @@ const Controller: React.FC = () => {
   const [loading, setLoading] = React.useState(true)
 
   useEffect(() => {
-    fetch('/api/status', { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
+    const token = localStorage.getItem('token')
+    fetch('/api/status', {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    })
+      .then((res) => res.json())
+      .then((data) => {
         if (data.authenticated) {
           setUser({ username: '', authenticated: true })
         } else {

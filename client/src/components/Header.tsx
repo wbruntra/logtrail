@@ -17,9 +17,9 @@ interface HeaderProps {
   backendSearchLoading: boolean
 }
 
-const Header: React.FC<HeaderProps> = ({ 
-  logFiles, 
-  selectedLog, 
+const Header: React.FC<HeaderProps> = ({
+  logFiles,
+  selectedLog,
   onLogChange,
   searchQuery,
   onSearchChange,
@@ -28,18 +28,19 @@ const Header: React.FC<HeaderProps> = ({
   matchCount,
   totalCount,
   onBackendSearch,
-  backendSearchLoading
+  backendSearchLoading,
 }) => {
-  const { setUser } = useUser()
+  const { logout } = useUser()
 
   const handleLogout = async () => {
     try {
+      localStorage.removeItem('token')
       const response = await fetch('/api/logout', {
         credentials: 'include',
       })
-      
+
       if (response.ok) {
-        setUser(null) // This will trigger the Controller to show the login form
+        logout() // This will trigger the Controller to show the login form
       } else {
         console.error('Logout failed')
       }
@@ -53,16 +54,14 @@ const Header: React.FC<HeaderProps> = ({
       <div className="container">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h1 className="display-5 mb-0">Logtrail</h1>
-          <button
-            className="btn btn-outline-light"
-            onClick={handleLogout}
-            type="button"
-          >
+          <button className="btn btn-outline-light" onClick={handleLogout} type="button">
             Logout
           </button>
         </div>
         <div className="mb-3">
-          <label htmlFor="log-select" className="form-label me-2">Select log file:</label>
+          <label htmlFor="log-select" className="form-label me-2">
+            Select log file:
+          </label>
           <select
             id="log-select"
             className="form-select d-inline-block w-auto"
@@ -76,7 +75,7 @@ const Header: React.FC<HeaderProps> = ({
             ))}
           </select>
         </div>
-        
+
         <SearchBar
           searchQuery={searchQuery}
           onSearchChange={onSearchChange}

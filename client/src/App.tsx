@@ -18,22 +18,22 @@ import type { LogLine } from './types/logTypes'
 function App() {
   const { logFiles, selectedLog, setSelectedLog } = useLogFiles()
   const { logs, connectToLog, setLogs } = useLogStream()
-  const { 
+  const {
     setHistoryOffset,
     hasMoreHistory,
     setHasMoreHistory,
-    loadingHistory, 
-    loadMoreHistory, 
-    resetHistory, 
-    historyLoadLock 
+    loadingHistory,
+    loadMoreHistory,
+    resetHistory,
+    historyLoadLock,
   } = useLogHistory()
-  
-  const { 
-    autoScroll, 
-    setAutoScroll, 
-    handleScroll: baseHandleScroll, 
+
+  const {
+    autoScroll,
+    setAutoScroll,
+    handleScroll: baseHandleScroll,
     containerRef,
-    scrollRestoreRef
+    scrollRestoreRef,
   } = useAutoScroll(logs)
 
   // Search functionality
@@ -44,7 +44,7 @@ function App() {
     isSearching,
     matchCount,
     clearSearch,
-    debouncedQuery
+    debouncedQuery,
   } = useLogSearch(logs)
 
   // Backend search functionality
@@ -56,7 +56,7 @@ function App() {
     searchFile,
     getContext,
     clearResults,
-    clearContext
+    clearContext,
   } = useBackendSearch()
 
   // State for showing search results
@@ -65,7 +65,7 @@ function App() {
   // Enhanced scroll handler that includes history loading logic
   const handleScroll = useCallback(() => {
     baseHandleScroll() // Handle auto-scroll state
-    
+
     const el = containerRef.current
     if (!el) return
 
@@ -82,15 +82,27 @@ function App() {
     if (el.scrollTop >= 100 && historyLoadLock.current) {
       historyLoadLock.current = false
     }
-  }, [baseHandleScroll, containerRef, hasMoreHistory, loadingHistory, historyLoadLock, loadMoreHistory, selectedLog, setLogs, scrollRestoreRef])
+  }, [
+    baseHandleScroll,
+    containerRef,
+    hasMoreHistory,
+    loadingHistory,
+    historyLoadLock,
+    loadMoreHistory,
+    selectedLog,
+    setLogs,
+    scrollRestoreRef,
+  ])
 
   // Fetch last 100 lines and connect to log stream when selectedLog changes
   useEffect(() => {
     if (!selectedLog) return
-    
+
     resetHistory()
-    
+
+    const token = localStorage.getItem('token')
     fetch(`/api/logs/history?file=${encodeURIComponent(selectedLog)}&limit=150`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       credentials: 'include',
     })
       .then((res) => res.json())
@@ -110,27 +122,36 @@ function App() {
   }, [selectedLog])
 
   // Handle line click to get context
-  const handleLineClick = useCallback(async (lineNumber: number) => {
-    if (selectedLog) {
-      await getContext(selectedLog, lineNumber, 20)
-    }
-  }, [selectedLog, getContext])
+  const handleLineClick = useCallback(
+    async (lineNumber: number) => {
+      if (selectedLog) {
+        await getContext(selectedLog, lineNumber, 20)
+      }
+    },
+    [selectedLog, getContext],
+  )
 
   // Handle backend search
-  const handleBackendSearch = useCallback(async (query: string) => {
-    if (selectedLog) {
-      await searchFile(selectedLog, query)
-      setShowSearchResults(true)
-    }
-  }, [selectedLog, searchFile])
+  const handleBackendSearch = useCallback(
+    async (query: string) => {
+      if (selectedLog) {
+        await searchFile(selectedLog, query)
+        setShowSearchResults(true)
+      }
+    },
+    [selectedLog, searchFile],
+  )
 
   // Handle search result line click
-  const handleSearchResultClick = useCallback(async (lineNumber: number, _content: string) => {
-    setShowSearchResults(false)
-    if (selectedLog) {
-      await getContext(selectedLog, lineNumber, 20)
-    }
-  }, [selectedLog, getContext])
+  const handleSearchResultClick = useCallback(
+    async (lineNumber: number, _content: string) => {
+      setShowSearchResults(false)
+      if (selectedLog) {
+        await getContext(selectedLog, lineNumber, 20)
+      }
+    },
+    [selectedLog, getContext],
+  )
 
   // Close search results
   const handleCloseSearchResults = useCallback(() => {
@@ -140,7 +161,7 @@ function App() {
 
   return (
     <div className="App" data-bs-theme="dark">
-      <Header 
+      <Header
         logFiles={logFiles}
         selectedLog={selectedLog}
         onLogChange={setSelectedLog}
@@ -166,7 +187,7 @@ function App() {
           onLineClick={handleLineClick}
         />
       </div>
-      
+
       <SearchResults
         results={searchResults}
         query={searchQuery}
@@ -175,9 +196,9 @@ function App() {
         onClose={handleCloseSearchResults}
         show={showSearchResults}
       />
-      
-      <Modal 
-        show={!!(contextData || isLoadingContext)} 
+
+      <Modal
+        show={!!(contextData || isLoadingContext)}
         onHide={clearContext}
         size="lg"
         centered
@@ -186,7 +207,9 @@ function App() {
       >
         <Modal.Header closeButton>
           <Modal.Title>
-            {isLoadingContext ? 'Loading Context...' : `Context for Line ${contextData?.targetLine}`}
+            {isLoadingContext
+              ? 'Loading Context...'
+              : `Context for Line ${contextData?.targetLine}`}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -201,17 +224,16 @@ function App() {
               {contextData?.lines.map((line, index) => {
                 const parsedLine = parseLogLine(line.content)
                 return (
-                  <div 
+                  <div
                     key={index}
-                    className={`context-line ${line.isTarget ? 'target-line' : ''} ${getLogLineClass(parsedLine.level)}`}
+                    className={`context-line ${
+                      line.isTarget ? 'target-line' : ''
+                    } ${getLogLineClass(parsedLine.level)}`}
                   >
                     <span className="context-line-number">{line.lineNumber}</span>
                     <span className="log-content">
                       {parsedLine.segments.map((segment, segIndex) => (
-                        <span 
-                          key={segIndex}
-                          className={segment.className}
-                        >
+                        <span key={segIndex} className={segment.className}>
                           {segment.text}
                         </span>
                       ))}

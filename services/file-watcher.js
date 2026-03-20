@@ -10,6 +10,7 @@ class FileWatcher extends EventEmitter {
     super()
     this.filePath = filePath
     this.currentLineNumber = 0
+    this.closed = false
     this.initializeLineNumber()
     this.startTail()
   }
@@ -35,6 +36,7 @@ class FileWatcher extends EventEmitter {
       encoding: 'utf8',
     })
     this.ts.on('data', (data) => {
+      if (this.closed) return // Don't emit after close
       const lines = data.toString().split('\n').filter(line => line.trim() !== '')
       lines.forEach(line => {
         this.currentLineNumber++
@@ -45,12 +47,20 @@ class FileWatcher extends EventEmitter {
       })
     })
     this.ts.on('error', (err) => {
-      this.emit('error', err)
+      if (!this.closed) {
+        this.emit('error', err)
+      }
     })
   }
 
   close() {
-    if (this.ts) this.ts.destroy()
+    if (this.closed) return
+    this.closed = true
+    if (this.ts) {
+      this.ts.destroy()
+      this.ts = null
+    }
+    this.removeAllListeners() // Clean up all event listeners
   }
 }
 

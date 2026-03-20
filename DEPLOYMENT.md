@@ -14,10 +14,10 @@ cp .env.example .env
 # Make sure LOGTRAIL_MODE=central
 
 # Install dependencies
-npm install
+bun install
 
 # Start development server
-npm run dev:central
+bun run dev:central
 ```
 
 ### 2. Production Deployment with PM2
@@ -26,10 +26,10 @@ npm run dev:central
 
 ```bash
 # Install PM2 globally
-npm install -g pm2
+bun install -g pm2
 
 # Deploy central server
-npm run deploy:central
+bun run deploy:central
 
 # Or manually:
 ./scripts/deploy.sh central production
@@ -47,7 +47,7 @@ cp .env.agent.template .env
 # - Set unique AGENT_API_KEY
 
 # Deploy agent
-npm run deploy:agent
+bun run deploy:agent
 
 # Or manually:
 ./scripts/deploy.sh agent production
@@ -58,11 +58,13 @@ npm run deploy:agent
 ### Environment Variables (.env)
 
 **Central Server:**
+
 - `LOGTRAIL_MODE=central`
 - `COOKIE_SECRET` - Secure session secret
 - `PORT` - Server port (default: 3000)
 
 **Agent:**
+
 - `LOGTRAIL_MODE=agent`
 - `AGENT_ID` - Unique agent identifier
 - `AGENT_NAME` - Human-readable agent name
@@ -72,12 +74,14 @@ npm run deploy:agent
 ### YAML Configuration
 
 **Central Server:** `config/central.config.yaml`
+
 - Server settings
 - Local log configuration
 - WebSocket settings
 - Authentication settings
 
 **Agent:** `config/agent.config.yaml`
+
 - Agent identity
 - Central server connection
 - Local log files to monitor
@@ -87,16 +91,16 @@ npm run deploy:agent
 
 ```bash
 # Start services
-npm run pm2:central     # Start central server
-npm run pm2:agent       # Start agent
+bun run pm2:central     # Start central server
+bun run pm2:agent       # Start agent
 
 # Monitor
-npm run pm2:logs        # View all logs
+bun run pm2:logs        # View all logs
 pm2 monit               # Interactive monitoring
 
 # Control
-npm run pm2:restart     # Restart all services
-npm run pm2:stop        # Stop all services
+bun run pm2:restart     # Restart all services
+bun run pm2:stop        # Stop all services
 pm2 restart logtrail-central  # Restart specific service
 
 # View logs
@@ -107,11 +111,13 @@ pm2 logs logtrail-agent
 ## Security
 
 ### Central Server
+
 - Uses session cookies for user authentication
 - Requires login via `/api/login` endpoint
 - Protected routes require valid session
 
 ### Agent
+
 - Uses API key authentication
 - Connects outbound to central server (firewall-friendly)
 - No user interface (API only)
