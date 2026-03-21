@@ -42,5 +42,6 @@ ecosystem.config.js.local
 pm2.json
 .env
 ecosystem.config.js
+ecosystem.config.cjs
 
 agent/*.yaml

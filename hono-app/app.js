@@ -11,7 +11,7 @@ cleanupOldFiles()
 setInterval(cleanupOldFiles, 24 * 60 * 60 * 1000)
 
 // Middleware for logging requests
-app.use('*', createLogger())
+app.use('*', createLogger({ ignoredPaths: ['/api/ingest'] }))
 
 // Mount the API routes
 const appRouter = require('./routes/index.js')
