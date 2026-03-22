@@ -30,7 +30,7 @@ export default function Dashboard() {
   const maxCodeCount = data?.topCodes[0]?.count ?? 1
 
   // Show x-axis labels at roughly 6 evenly spaced positions
-  const xLabelIndices = (byHour: typeof data.byHour) => {
+  const xLabelIndices = (byHour: { hour: string; errors: number; warns: number }[]) => {
     const len = byHour.length
     const step = Math.ceil(len / 5)
     const indices = new Set<number>()
