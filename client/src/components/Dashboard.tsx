@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useDashboard } from '../hooks/useDashboard'
+import { Modal } from 'react-bootstrap'
+import { useDashboard, type RecentError } from '../hooks/useDashboard'
 import Header from './Header'
 import '../styles/dashboard.css'
 
@@ -21,6 +22,7 @@ function formatHourLabel(isoStr: string): string {
 
 export default function Dashboard() {
   const [hours, setHours] = useState(24)
+  const [selected, setSelected] = useState<RecentError | null>(null)
   const { data, loading, error } = useDashboard(hours)
 
   const maxBarValue = data
@@ -218,7 +220,7 @@ export default function Dashboard() {
                     <div className="dashboard-empty">No errors in this period</div>
                   ) : (
                     data.recentErrors.map((err, i) => (
-                      <div key={i} className="error-row">
+                      <div key={i} className="error-row error-row-clickable" onClick={() => setSelected(err)}>
                         <span className="err-time">{formatTime(err.ts)}</span>
                         <span className="err-app">{err.app}</span>
                         {err.code && <span className="err-code">{err.code}</span>}
@@ -239,6 +241,96 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* ── Error detail modal ──────────────────────────────────────── */}
+      <Modal
+        show={!!selected}
+        onHide={() => setSelected(null)}
+        size="lg"
+        centered
+        data-bs-theme="dark"
+      >
+        {selected && (
+          <>
+            <Modal.Header closeButton>
+              <Modal.Title className="d-flex align-items-center gap-2" style={{ fontSize: '1rem' }}>
+                <span className="badge bg-danger">ERROR</span>
+                {selected.code && (
+                  <span className="badge" style={{ background: 'rgba(111,66,193,0.4)', color: '#a78bfa' }}>
+                    {selected.code}
+                  </span>
+                )}
+                <span className="text-secondary" style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                  {selected.app}
+                </span>
+              </Modal.Title>
+            </Modal.Header>
+            <Modal.Body style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+              {/* Message */}
+              <div className="mb-3" style={{ color: '#f8f9fa', fontSize: '0.95rem' }}>
+                {selected.msg}
+              </div>
+
+              {/* Metadata grid */}
+              <div className="row g-2 mb-3">
+                <DetailField label="Time" value={new Date(selected.ts).toLocaleString()} />
+                <DetailField label="App" value={selected.app} />
+                {selected.method && selected.path && (
+                  <DetailField label="Request" value={`${selected.method} ${selected.path}`} />
+                )}
+                {selected.status != null && (
+                  <DetailField label="Status" value={String(selected.status)} />
+                )}
+                {selected.duration != null && (
+                  <DetailField label="Duration" value={`${selected.duration}ms`} />
+                )}
+                {selected.reqId && (
+                  <DetailField label="Request ID" value={selected.reqId} />
+                )}
+                {selected.userId != null && (
+                  <DetailField label="User ID" value={String(selected.userId)} />
+                )}
+              </div>
+
+              {/* Stack trace */}
+              {selected.stack && (
+                <>
+                  <div className="text-secondary mb-1" style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Stack trace
+                  </div>
+                  <pre style={{
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '4px',
+                    padding: '0.75rem',
+                    fontSize: '0.75rem',
+                    color: '#f8d7da',
+                    overflowX: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    maxHeight: '300px',
+                    overflowY: 'auto',
+                    margin: 0,
+                  }}>
+                    {selected.stack}
+                  </pre>
+                </>
+              )}
+            </Modal.Body>
+          </>
+        )}
+      </Modal>
+    </div>
+  )
+}
+
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="col-6">
+      <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6c757d', marginBottom: '2px' }}>
+        {label}
+      </div>
+      <div style={{ color: '#f8f9fa' }}>{value}</div>
     </div>
   )
 }

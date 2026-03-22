@@ -26,6 +26,10 @@ export interface RecentError {
   method: string | null
   path: string | null
   status: number | null
+  duration: number | null
+  reqId: string | null
+  userId: string | number | null
+  stack: string | null
 }
 
 export interface DashboardData {

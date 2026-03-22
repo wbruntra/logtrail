@@ -179,6 +179,15 @@
   border-bottom: none;
 }
 
+.error-row-clickable {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.error-row-clickable:hover {
+  background: rgba(220, 53, 69, 0.08);
+}
+
 .error-row .err-time {
   color: #6c757d;
   flex-shrink: 0;

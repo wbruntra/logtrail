@@ -75,6 +75,10 @@ router.get('/', (c) => {
           method: event.method ?? null,
           path: event.path ?? null,
           status: event.status ?? null,
+          duration: event.duration ?? null,
+          reqId: event.reqId ?? null,
+          userId: event.userId ?? null,
+          stack: event.stack ?? null,
         })
       }
     }
