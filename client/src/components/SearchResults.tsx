@@ -9,7 +9,7 @@ interface SearchResultsProps {
   results: SearchResult[]
   query: string
   isLoading: boolean
-  onLineClick?: (lineNumber: number, content: string) => void
+  onLineClick?: () => void
   onClose: () => void
   show: boolean
 }
@@ -18,7 +18,6 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   results,
   query,
   isLoading,
-  onLineClick,
   onClose,
   show
 }) => {
@@ -61,8 +60,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
               return (
                 <div
                   key={index}
-                  className={`search-result-item ${onLineClick ? 'clickable' : ''} ${getLogLineClass(parsedLine.level)}`}
-                  onClick={() => onLineClick?.(result.lineNumber, result.content)}
+                  className={`search-result-item ${getLogLineClass(parsedLine.level)}`}
                 >
                   <div className="search-result-line-number">
                     Line {result.lineNumber}

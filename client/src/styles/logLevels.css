@@ -141,6 +141,88 @@
   font-weight: 600;
 }
 
+/* ------------------------------------------------------------------ */
+/* Structured event layout (JSON lines from logtrail-middleware)       */
+/* ------------------------------------------------------------------ */
+
+.structured-event {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.structured-time {
+  color: #6c757d;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+  font-family: 'Courier New', monospace;
+}
+
+.structured-level {
+  font-weight: 700;
+  font-size: 0.7rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  letter-spacing: 0.05em;
+}
+
+.structured-level-error   { color: #dc3545; background: rgba(220, 53, 69, 0.15); }
+.structured-level-warn    { color: #ffc107; background: rgba(255, 193, 7, 0.15); }
+.structured-level-info    { color: #17a2b8; background: rgba(23, 162, 184, 0.1); }
+.structured-level-debug   { color: #6c757d; background: rgba(108, 117, 125, 0.1); }
+.structured-level-success { color: #28a745; background: rgba(40, 167, 69, 0.1); }
+
+.structured-code {
+  color: #6c757d;
+  font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.structured-msg {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.structured-meta {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  align-items: center;
+  margin-left: auto;
+}
+
+.structured-pill {
+  font-size: 0.7rem;
+  color: #6c757d;
+  background: rgba(108, 117, 125, 0.12);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+}
+
+.structured-reqid {
+  opacity: 0.6;
+}
+
+[data-bs-theme="dark"] .structured-time  { color: #888; }
+[data-bs-theme="dark"] .structured-code  { color: #888; }
+[data-bs-theme="dark"] .structured-pill  { color: #888; background: rgba(255, 255, 255, 0.07); }
+
+[data-bs-theme="dark"] .structured-level-error   { color: #d9534f; background: rgba(217, 83, 79, 0.2); }
+[data-bs-theme="dark"] .structured-level-warn    { color: #f0ad4e; background: rgba(240, 173, 78, 0.2); }
+[data-bs-theme="dark"] .structured-level-info    { color: #5bc0de; background: rgba(91, 192, 222, 0.15); }
+[data-bs-theme="dark"] .structured-level-debug   { color: #999;    background: rgba(153, 153, 153, 0.15); }
+[data-bs-theme="dark"] .structured-level-success { color: #5cb85c; background: rgba(92, 184, 92, 0.15); }
+
 /* Dark theme adjustments */
 [data-bs-theme="dark"] .log-line-error {
   background-color: rgba(220, 53, 69, 0.15);

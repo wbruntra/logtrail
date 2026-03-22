@@ -31,11 +31,17 @@ function ensureAppDir(app) {
   fs.mkdirSync(getAppDir(app), { recursive: true })
 }
 
-function writeEntry(app, msg) {
+// msgOrEvent: string (legacy plain text) or object (structured event)
+function writeEntry(app, msgOrEvent) {
   const ts = new Date().toISOString()
   ensureAppDir(app)
   const totalLines = getAllLines(app).length
-  const content = `${ts} ${msg}`
+
+  const content =
+    typeof msgOrEvent === 'string'
+      ? `${ts} ${msgOrEvent}`
+      : JSON.stringify({ ts, ...msgOrEvent })
+
   fs.appendFileSync(getTodayFile(app), content + '\n')
   ingestEmitter.emit(`data:${sanitizeApp(app)}`, { lineNumber: totalLines + 1, content })
   return ts

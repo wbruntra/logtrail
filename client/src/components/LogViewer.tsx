@@ -1,9 +1,9 @@
 import React from 'react'
 import AutoScrollButton from './AutoScrollButton'
 import LoadingIndicator from './LoadingIndicator'
-import { parseLogLine, getLogLineClass } from '../utils/logParser'
+import { parseLogLine, getLogLineClass, tryParseStructured } from '../utils/logParser'
 import { highlightSearchMatches } from '../utils/searchHighlight'
-import type { LogLine } from '../types/logTypes'
+import type { LogLine, StructuredEvent } from '../types/logTypes'
 import '../styles/logLevels.css'
 import '../styles/search.css'
 
@@ -16,7 +16,22 @@ interface LogViewerProps {
   containerRef: React.RefObject<HTMLDivElement | null>
   searchQuery?: string
   debouncedQuery?: string
-  onLineClick?: (lineNumber: number, content: string) => void
+}
+
+const STRUCTURED_LINE_CLASS: Record<StructuredEvent['level'], string> = {
+  error: 'log-line-error',
+  warn: 'log-line-warning',
+  info: 'log-line-info',
+  debug: 'log-line-debug',
+  success: 'log-line-success',
+}
+
+function formatTime(isoStr: string): string {
+  try {
+    return new Date(isoStr).toLocaleTimeString('en-US', { hour12: false })
+  } catch {
+    return isoStr.slice(11, 19)
+  }
 }
 
 const LogViewer: React.FC<LogViewerProps> = ({
@@ -27,7 +42,6 @@ const LogViewer: React.FC<LogViewerProps> = ({
   loadingHistory,
   containerRef,
   debouncedQuery = '',
-  onLineClick
 }) => {
   const handleAutoScrollToggle = () => {
     if (!autoScroll && containerRef.current) {
@@ -41,26 +55,57 @@ const LogViewer: React.FC<LogViewerProps> = ({
       {loadingHistory && <LoadingIndicator />}
       <pre className="mb-0">
         {logs.map((logLine, index) => {
+          const structured = tryParseStructured(logLine.content)
+
+          if (structured) {
+            const lineClass = STRUCTURED_LINE_CLASS[structured.level] ?? 'log-line-default'
+            const msgHighlights = debouncedQuery
+              ? highlightSearchMatches(structured.msg, debouncedQuery)
+              : null
+
+            return (
+              <div key={index} className={`${lineClass} structured-event`}>
+                <span className="log-line-number">{logLine.lineNumber}</span>
+                <span className="structured-time">{formatTime(structured.ts)}</span>
+                <span className={`structured-level structured-level-${structured.level}`}>
+                  {structured.level.toUpperCase()}
+                </span>
+                {structured.code && (
+                  <span className="structured-code">{structured.code}</span>
+                )}
+                <span className="structured-msg">
+                  {msgHighlights
+                    ? msgHighlights.map((h, i) =>
+                        h.isMatch
+                          ? <span key={i} className="search-highlight">{h.text}</span>
+                          : <span key={i}>{h.text}</span>
+                      )
+                    : structured.msg}
+                </span>
+                <span className="structured-meta">
+                  {structured.method && structured.status !== undefined && (
+                    <span className="structured-pill">{structured.method} {structured.status}</span>
+                  )}
+                  {structured.duration !== undefined && (
+                    <span className="structured-pill">{structured.duration}ms</span>
+                  )}
+                  {structured.reqId && (
+                    <span className="structured-pill structured-reqid">req:{structured.reqId}</span>
+                  )}
+                </span>
+              </div>
+            )
+          }
+
+          // Plain text line
           const parsedLog = parseLogLine(logLine.content)
           const lineClass = getLogLineClass(parsedLog.level)
           const searchHighlights = highlightSearchMatches(logLine.content, debouncedQuery)
-          
-          const handleLineClick = () => {
-            if (onLineClick) {
-              onLineClick(logLine.lineNumber, logLine.content)
-            }
-          }
-          
+
           return (
-            <div 
-              key={index} 
-              className={`${lineClass} ${onLineClick ? 'log-line-clickable' : ''}`}
-              onClick={handleLineClick}
-              title={onLineClick ? `Line ${logLine.lineNumber} - Click for context` : undefined}
-            >
+            <div key={index} className={lineClass}>
               <span className="log-line-number">{logLine.lineNumber}</span>
               {debouncedQuery ? (
-                // Render with search highlighting
                 searchHighlights.map((highlight, highlightIndex) => (
                   highlight.isMatch ? (
                     <span key={highlightIndex} className="search-highlight">
@@ -71,7 +116,6 @@ const LogViewer: React.FC<LogViewerProps> = ({
                   )
                 ))
               ) : (
-                // Render with log level highlighting only
                 parsedLog.segments.map((segment, segIndex) => (
                   segment.className ? (
                     <span key={segIndex} className={segment.className}>

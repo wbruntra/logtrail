@@ -15,9 +15,16 @@ router.use('*', async (c, next) => {
   return next()
 })
 
+const KNOWN_LEVELS = new Set(['error', 'warn', 'info', 'debug', 'success'])
+
 // POST /api/ingest
-// Single line:  { app: string, msg: string }
-// Batch:        { app: string, lines: string[] }
+//
+// Structured event (new):
+//   { app, level, msg, code?, reqId?, method?, path?, status?, duration?, userId?, stack?, ... }
+//
+// Legacy plain text (still supported):
+//   Single: { app, msg }
+//   Batch:  { app, lines: string[] }
 router.post('/', async (c) => {
   let body
   try {
@@ -26,7 +33,7 @@ router.post('/', async (c) => {
     return c.json({ error: 'Invalid JSON body' }, 400)
   }
 
-  const { app, msg, lines } = body
+  const { app, msg, lines, level, ...rest } = body
 
   if (!app || typeof app !== 'string' || !app.trim()) {
     return c.json({ error: 'app field is required' }, 400)
@@ -34,6 +41,16 @@ router.post('/', async (c) => {
 
   const appName = app.trim()
 
+  // Structured event — has a recognised level field
+  if (level && KNOWN_LEVELS.has(level.toLowerCase())) {
+    if (!msg || typeof msg !== 'string' || !msg.trim()) {
+      return c.json({ error: 'msg is required for structured events' }, 400)
+    }
+    writeEntry(appName, { level: level.toLowerCase(), msg: msg.trim(), ...rest })
+    return c.json({ ok: true, written: 1 })
+  }
+
+  // Legacy batch
   if (Array.isArray(lines)) {
     const valid = lines.filter((l) => typeof l === 'string' && l.trim())
     if (!valid.length) return c.json({ error: 'No valid lines provided' }, 400)
@@ -41,12 +58,13 @@ router.post('/', async (c) => {
     return c.json({ ok: true, written: valid.length })
   }
 
+  // Legacy single
   if (msg && typeof msg === 'string' && msg.trim()) {
     writeEntry(appName, msg.trim())
     return c.json({ ok: true, written: 1 })
   }
 
-  return c.json({ error: 'msg (string) or lines (array) field required' }, 400)
+  return c.json({ error: 'msg (string), lines (array), or structured event with level required' }, 400)
 })
 
 module.exports = router

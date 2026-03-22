@@ -1,3 +1,5 @@
+import type { StructuredEvent } from '../types/logTypes'
+
 export interface LogLevel {
   type: 'success' | 'info' | 'warning' | 'error' | 'debug' | 'default'
   statusCode?: number
@@ -169,6 +171,23 @@ export function parseLogLine(logLine: string): ParsedLog {
     originalText: logLine,
     level,
     segments
+  }
+}
+
+/**
+ * Attempt to parse a log line as a structured event (JSON emitted by logtrail-middleware).
+ * Returns the parsed object if valid, null if the line is plain text.
+ */
+export function tryParseStructured(content: string): StructuredEvent | null {
+  if (!content.startsWith('{')) return null
+  try {
+    const obj = JSON.parse(content)
+    if (obj && typeof obj === 'object' && typeof obj.level === 'string' && typeof obj.msg === 'string') {
+      return obj
+    }
+    return null
+  } catch {
+    return null
   }
 }
 
