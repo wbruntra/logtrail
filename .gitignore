@@ -45,3 +45,5 @@ ecosystem.config.js
 ecosystem.config.cjs
 
 agent/*.yaml
+
+ingested-logs/*

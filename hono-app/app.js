@@ -23,4 +23,7 @@ app.route('/api/logs', logsRouter)
 const ingestRouter = require('./routes/ingest.js')
 app.route('/api/ingest', ingestRouter)
 
+const dashboardRouter = require('./routes/dashboard.js')
+app.route('/api/dashboard', dashboardRouter)
+
 module.exports = app

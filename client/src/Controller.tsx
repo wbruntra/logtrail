@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import App from './App'
+import Dashboard from './components/Dashboard'
 import LoginForm from './LoginForm'
 import { useUser } from './UserContext'
 
@@ -36,7 +38,14 @@ const Controller: React.FC = () => {
   if (!user || !user.authenticated) {
     return <LoginForm onLoginSuccess={() => setUser({ username: '', authenticated: true })} />
   }
-  return <App />
+
+  return (
+    <Routes>
+      <Route path="/logs" element={<App />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="*" element={<Navigate to="/logs" replace />} />
+    </Routes>
+  )
 }
 
 export default Controller
