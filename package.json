@@ -7,7 +7,8 @@
     "dev": "bun run --parallel backend client",
     "backend": "bun --watch hono-app/bin/www",
     "client": "cd client && bun run dev",
-    "start": "bun bin/www"
+    "start": "bun bin/www",
+    "verify:ingested-stream": "bun scripts/verify-ingested-stream.js"
   },
   "keywords": [],
   "author": "",

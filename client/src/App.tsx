@@ -1,5 +1,4 @@
 import { useEffect, useCallback, useState } from 'react'
-import { Modal } from 'react-bootstrap'
 import './App.scss'
 import './styles/ansiColors.css'
 import './styles/modals.css'
@@ -12,7 +11,6 @@ import { useLogHistory } from './hooks/useLogHistory'
 import { useAutoScroll } from './hooks/useAutoScroll'
 import { useLogSearch } from './hooks/useLogSearch'
 import { useBackendSearch } from './hooks/useBackendSearch'
-import { parseLogLine, getLogLineClass } from './utils/logParser'
 import type { LogLine } from './types/logTypes'
 
 function App() {
@@ -36,7 +34,6 @@ function App() {
     scrollRestoreRef,
   } = useAutoScroll(logs)
 
-  // Search functionality
   const {
     searchQuery,
     setSearchQuery,
@@ -47,38 +44,28 @@ function App() {
     debouncedQuery,
   } = useLogSearch(logs)
 
-  // Backend search functionality
   const {
     searchResults,
-    contextData,
     isSearching: isBackendSearching,
-    isLoadingContext,
     searchFile,
-    getContext,
     clearResults,
-    clearContext,
   } = useBackendSearch()
 
-  // State for showing search results
   const [showSearchResults, setShowSearchResults] = useState(false)
 
-  // Enhanced scroll handler that includes history loading logic
   const handleScroll = useCallback(() => {
-    baseHandleScroll() // Handle auto-scroll state
+    baseHandleScroll()
 
     const el = containerRef.current
     if (!el) return
 
-    // If near the top, load more history (only once until user scrolls away)
     if (el.scrollTop < 100 && hasMoreHistory && !loadingHistory && !historyLoadLock.current) {
-      // Store scroll position before loading history
       scrollRestoreRef.current.prevScrollHeight = el.scrollHeight
       scrollRestoreRef.current.prevScrollTop = el.scrollTop
       scrollRestoreRef.current.pending = true
       loadMoreHistory(selectedLog, setLogs)
     }
 
-    // Reset lock if user scrolls away from the top
     if (el.scrollTop >= 100 && historyLoadLock.current) {
       historyLoadLock.current = false
     }
@@ -94,7 +81,6 @@ function App() {
     scrollRestoreRef,
   ])
 
-  // Fetch last 100 lines and connect to log stream when selectedLog changes
   useEffect(() => {
     if (!selectedLog) return
 
@@ -121,17 +107,6 @@ function App() {
       })
   }, [selectedLog])
 
-  // Handle line click to get context
-  const handleLineClick = useCallback(
-    async (lineNumber: number) => {
-      if (selectedLog) {
-        await getContext(selectedLog, lineNumber, 20)
-      }
-    },
-    [selectedLog, getContext],
-  )
-
-  // Handle backend search
   const handleBackendSearch = useCallback(
     async (query: string) => {
       if (selectedLog) {
@@ -142,18 +117,6 @@ function App() {
     [selectedLog, searchFile],
   )
 
-  // Handle search result line click
-  const handleSearchResultClick = useCallback(
-    async (lineNumber: number, _content: string) => {
-      setShowSearchResults(false)
-      if (selectedLog) {
-        await getContext(selectedLog, lineNumber, 20)
-      }
-    },
-    [selectedLog, getContext],
-  )
-
-  // Close search results
   const handleCloseSearchResults = useCallback(() => {
     setShowSearchResults(false)
     clearResults()
@@ -184,7 +147,6 @@ function App() {
           containerRef={containerRef}
           searchQuery={searchQuery}
           debouncedQuery={debouncedQuery}
-          onLineClick={handleLineClick}
         />
       </div>
 
@@ -192,59 +154,10 @@ function App() {
         results={searchResults}
         query={searchQuery}
         isLoading={isBackendSearching}
-        onLineClick={handleSearchResultClick}
+        onLineClick={handleCloseSearchResults}
         onClose={handleCloseSearchResults}
         show={showSearchResults}
       />
-
-      <Modal
-        show={!!(contextData || isLoadingContext)}
-        onHide={clearContext}
-        size="lg"
-        centered
-        dialogClassName="context-modal"
-        data-bs-theme="dark"
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>
-            {isLoadingContext
-              ? 'Loading Context...'
-              : `Context for Line ${contextData?.targetLine}`}
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {isLoadingContext ? (
-            <div className="text-center p-3">
-              <div className="spinner-border" role="status">
-                <span className="visually-hidden">Loading...</span>
-              </div>
-            </div>
-          ) : (
-            <pre className="context-content">
-              {contextData?.lines.map((line, index) => {
-                const parsedLine = parseLogLine(line.content)
-                return (
-                  <div
-                    key={index}
-                    className={`context-line ${
-                      line.isTarget ? 'target-line' : ''
-                    } ${getLogLineClass(parsedLine.level)}`}
-                  >
-                    <span className="context-line-number">{line.lineNumber}</span>
-                    <span className="log-content">
-                      {parsedLine.segments.map((segment, segIndex) => (
-                        <span key={segIndex} className={segment.className}>
-                          {segment.text}
-                        </span>
-                      ))}
-                    </span>
-                  </div>
-                )
-              })}
-            </pre>
-          )}
-        </Modal.Body>
-      </Modal>
     </div>
   )
 }

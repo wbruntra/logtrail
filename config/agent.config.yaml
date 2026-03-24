@@ -1,5 +1,5 @@
-central_url: "https://logtrail2.lunaparkdigital.com"
-agent_secret: "some-long-random-string"   # must match AGENT_SECRET on central
-app_name: "production_server"                  # label shown in the UI
+central_url: 'https://logtrail2.lunaparkdigital.com'
+agent_secret: 'bent2499start4758real2289ranging'
+app_name: 'production_server'
 files:
   - /home/william/logs/redesign-api.log

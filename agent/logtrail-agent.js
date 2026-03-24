@@ -31,23 +31,40 @@ try {
   process.exit(1)
 }
 
-const { central_url, agent_secret, app_name, files } = config
+const { central_url, agent_secret, app_name: default_app_name, files } = config
 
-if (!central_url || !agent_secret || !app_name || !Array.isArray(files) || !files.length) {
+if (!central_url || !agent_secret || !default_app_name || !Array.isArray(files) || !files.length) {
   console.error('[agent] Config must include: central_url, agent_secret, app_name, files[]')
   process.exit(1)
 }
 
-// --- Send queue with batching and retry ---
+// Normalise each file entry to { filePath, appName }
+const fileEntries = files.map((entry) => {
+  if (typeof entry === 'string') return { filePath: entry, appName: default_app_name }
+  if (entry && typeof entry.path === 'string') {
+    return { filePath: entry.path, appName: entry.app_name || default_app_name }
+  }
+  console.error('[agent] Invalid file entry in config:', entry)
+  process.exit(1)
+})
+
+// --- Send queue with batching and retry (one queue per app) ---
 
 const FLUSH_INTERVAL_MS = 500   // How often to flush buffered lines to central
 const MAX_BUFFER_SIZE = 1000    // Drop oldest lines if buffer grows beyond this
 
-let sendQueue = []
-let isSending = false
-let lastErrorMsg = null         // Track last error to avoid log spam
+// Map of appName -> { queue: string[], isSending: bool, lastErrorMsg: string|null }
+const appQueues = {}
 
-async function sendBatch(lines) {
+function getQueue(appName) {
+  if (!appQueues[appName]) {
+    appQueues[appName] = { queue: [], isSending: false, lastErrorMsg: null }
+  }
+  return appQueues[appName]
+}
+
+async function sendBatch(appName, lines) {
+  const state = getQueue(appName)
   try {
     const res = await fetch(`${central_url}/api/ingest`, {
       method: 'POST',
@@ -55,7 +72,7 @@ async function sendBatch(lines) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${agent_secret}`,
       },
-      body: JSON.stringify({ app: app_name, lines }),
+      body: JSON.stringify({ app: appName, lines }),
     })
 
     if (!res.ok) {
@@ -63,50 +80,55 @@ async function sendBatch(lines) {
       throw new Error(`HTTP ${res.status}: ${text}`)
     }
 
-    if (lastErrorMsg !== null) {
-      console.log('[agent] Reconnected to central server')
-      lastErrorMsg = null
+    if (state.lastErrorMsg !== null) {
+      console.log(`[agent] Reconnected to central server (app: ${appName})`)
+      state.lastErrorMsg = null
     }
     return true
   } catch (err) {
-    if (err.message !== lastErrorMsg) {
-      console.error('[agent] Failed to send to central:', err.message)
-      lastErrorMsg = err.message
+    if (err.message !== state.lastErrorMsg) {
+      console.error(`[agent] Failed to send to central (app: ${appName}):`, err.message)
+      state.lastErrorMsg = err.message
     }
     return false
   }
 }
 
 async function flush() {
-  if (isSending || sendQueue.length === 0) return
-  isSending = true
+  for (const [appName, state] of Object.entries(appQueues)) {
+    if (state.isSending || state.queue.length === 0) continue
+    state.isSending = true
 
-  const batch = sendQueue.splice(0, 200)
-  const ok = await sendBatch(batch)
+    const batch = state.queue.splice(0, 200)
+    const ok = await sendBatch(appName, batch)
 
-  if (!ok) {
-    // Put lines back at the front for retry
-    sendQueue.unshift(...batch)
+    if (!ok) {
+      // Put lines back at the front for retry
+      state.queue.unshift(...batch)
 
-    // Drop oldest lines if buffer is too large
-    if (sendQueue.length > MAX_BUFFER_SIZE) {
-      const dropped = sendQueue.length - MAX_BUFFER_SIZE
-      sendQueue = sendQueue.slice(dropped)
-      console.warn(`[agent] Buffer full — dropped ${dropped} oldest lines`)
+      // Drop oldest lines if buffer is too large
+      if (state.queue.length > MAX_BUFFER_SIZE) {
+        const dropped = state.queue.length - MAX_BUFFER_SIZE
+        state.queue = state.queue.slice(dropped)
+        console.warn(`[agent] Buffer full (app: ${appName}) — dropped ${dropped} oldest lines`)
+      }
     }
-  }
 
-  isSending = false
+    state.isSending = false
+  }
 }
 
 setInterval(flush, FLUSH_INTERVAL_MS)
 
 // --- File watchers ---
 
-for (const filePath of files) {
+for (const { filePath, appName } of fileEntries) {
   const absPath = path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath)
 
-  console.log(`[agent] Watching: ${absPath}`)
+  console.log(`[agent] Watching: ${absPath} → app: "${appName}"`)
+
+  // Ensure a queue exists for this app upfront
+  getQueue(appName)
 
   const ts = tailStream.createReadStream(absPath, {
     beginAt: 'end',       // Only tail new lines, don't replay existing content
@@ -118,7 +140,7 @@ for (const filePath of files) {
 
   ts.on('data', (data) => {
     const lines = data.toString().split('\n').filter((l) => l.trim())
-    if (lines.length) sendQueue.push(...lines)
+    if (lines.length) getQueue(appName).queue.push(...lines)
   })
 
   ts.on('error', (err) => {
@@ -126,7 +148,8 @@ for (const filePath of files) {
   })
 }
 
-console.log(`[agent] Running — app: "${app_name}", central: ${central_url}, watching ${files.length} file(s)`)
+const uniqueApps = [...new Set(fileEntries.map((e) => e.appName))]
+console.log(`[agent] Running — central: ${central_url}, watching ${fileEntries.length} file(s) across app(s): ${uniqueApps.join(', ')}`)
 
 process.on('SIGINT', () => {
   console.log('[agent] Shutting down...')

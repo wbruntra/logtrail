@@ -111,24 +111,46 @@ router.get('/list', (c) => {
 router.get('/stream', (c) => {
   const fileParam = c.req.query('file')
 
-  const appName = parseIngested(fileParam)
-  const absPath = (() => {
-    if (appName !== null) {
-      return getTodayFile(appName)
-    }
-    const logs = getLogConfig()
-    const logEntry = logs.find((l) => l.path === fileParam)
-    if (!logEntry) return null
-    return path.isAbsolute(logEntry.path)
-      ? logEntry.path
-      : path.join(process.cwd(), logEntry.path)
-  })()
+  c.header('X-Accel-Buffering', 'no') // Disable nginx buffering
 
-  if (!absPath) {
-    return c.json({ error: 'Invalid log file' }, 400)
+  const appName = parseIngested(fileParam)
+
+  // Ingested logs are written to disk and later read from disk during refresh/history requests.
+  // Stream from the underlying file as well so live updates work even when ingest requests and
+  // browser SSE connections are handled by different processes.
+  if (appName !== null) {
+    const todayFile = getTodayFile(appName)
+
+    return streamSSE(c, async (stream) => {
+      const fileWatcher = new FileWatcher(todayFile)
+      const sendLogData = (data) => {
+        stream.writeSSE({ data: JSON.stringify(data) })
+      }
+      fileWatcher.on('data', sendLogData)
+
+      const heartbeatInterval = setInterval(() => {
+        stream.writeSSE({ event: 'ping', data: 'heartbeat' })
+      }, 15000)
+
+      await new Promise((resolve) => {
+        stream.onAbort(() => {
+          clearInterval(heartbeatInterval)
+          fileWatcher.removeListener('data', sendLogData)
+          fileWatcher.close()
+          resolve()
+        })
+      })
+    })
   }
 
-  c.header('X-Accel-Buffering', 'no') // Disable nginx buffering
+  const logs = getLogConfig()
+  const logEntry = logs.find((l) => l.path === fileParam)
+  if (!logEntry) {
+    return c.json({ error: 'Invalid log file' }, 400)
+  }
+  const absPath = path.isAbsolute(logEntry.path)
+    ? logEntry.path
+    : path.join(process.cwd(), logEntry.path)
 
   return streamSSE(c, async (stream) => {
     const fileWatcher = new FileWatcher(absPath)

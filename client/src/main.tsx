@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 
 import { UserProvider } from './UserContext'
 import Controller from './Controller'
@@ -19,8 +20,10 @@ window.fetch = async function (...args) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <UserProvider>
-      <Controller />
-    </UserProvider>
+    <BrowserRouter>
+      <UserProvider>
+        <Controller />
+      </UserProvider>
+    </BrowserRouter>
   </StrictMode>,
 )
