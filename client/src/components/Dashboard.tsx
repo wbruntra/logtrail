@@ -23,6 +23,8 @@ function formatHourLabel(isoStr: string): string {
 export default function Dashboard() {
   const [hours, setHours] = useState(24)
   const [selected, setSelected] = useState<RecentError | null>(null)
+  const [showErrors, setShowErrors] = useState(true)
+  const [showWarns, setShowWarns] = useState(true)
   const { data, loading, error } = useDashboard(hours)
 
   const maxBarValue = data
@@ -215,21 +217,39 @@ export default function Dashboard() {
               {/* Recent errors & warnings */}
               <div className="col-12 col-lg-4">
                 <div className="panel-card">
-                  <div className="panel-title">Recent errors &amp; warnings</div>
-                  {data.recentErrors.length === 0 ? (
-                    <div className="dashboard-empty">No errors or warnings in this period</div>
+                  <div className="panel-title-row">
+                    <span className="panel-title">Recent errors &amp; warnings</span>
+                    <div className="level-filter-pills">
+                      <button
+                        className={`level-pill level-pill-error${showErrors ? ' active' : ''}`}
+                        onClick={() => setShowErrors((v) => !v)}
+                      >
+                        Errors
+                      </button>
+                      <button
+                        className={`level-pill level-pill-warn${showWarns ? ' active' : ''}`}
+                        onClick={() => setShowWarns((v) => !v)}
+                      >
+                        Warnings
+                      </button>
+                    </div>
+                  </div>
+                  {data.recentErrors.filter((e) => (e.level === 'error' ? showErrors : showWarns)).length === 0 ? (
+                    <div className="dashboard-empty">No {!showErrors ? 'warnings' : !showWarns ? 'errors' : 'errors or warnings'} in this period</div>
                   ) : (
-                    data.recentErrors.map((err, i) => (
-                      <div key={i} className="error-row error-row-clickable" onClick={() => setSelected(err)}>
-                        <span className={`err-level-badge ${err.level === 'warn' ? 'err-level-warn' : 'err-level-error'}`}>
-                          {err.level === 'warn' ? 'W' : 'E'}
-                        </span>
-                        <span className="err-time">{formatTime(err.ts)}</span>
-                        <span className="err-app">{err.app}</span>
-                        {err.code && <span className="err-code">{err.code}</span>}
-                        <span className="err-msg">{err.msg}</span>
-                      </div>
-                    ))
+                    data.recentErrors
+                      .filter((e) => (e.level === 'error' ? showErrors : showWarns))
+                      .map((err, i) => (
+                        <div key={i} className="error-row error-row-clickable" onClick={() => setSelected(err)}>
+                          <span className={`err-level-badge ${err.level === 'warn' ? 'err-level-warn' : 'err-level-error'}`}>
+                            {err.level === 'warn' ? 'W' : 'E'}
+                          </span>
+                          <span className="err-time">{formatTime(err.ts)}</span>
+                          <span className="err-app">{err.app}</span>
+                          {err.code && <span className="err-code">{err.code}</span>}
+                          <span className="err-msg">{err.msg}</span>
+                        </div>
+                      ))
                   )}
                 </div>
               </div>
