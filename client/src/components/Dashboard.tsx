@@ -212,15 +212,18 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Recent errors */}
+              {/* Recent errors & warnings */}
               <div className="col-12 col-lg-4">
                 <div className="panel-card">
-                  <div className="panel-title">Recent errors</div>
+                  <div className="panel-title">Recent errors &amp; warnings</div>
                   {data.recentErrors.length === 0 ? (
-                    <div className="dashboard-empty">No errors in this period</div>
+                    <div className="dashboard-empty">No errors or warnings in this period</div>
                   ) : (
                     data.recentErrors.map((err, i) => (
                       <div key={i} className="error-row error-row-clickable" onClick={() => setSelected(err)}>
+                        <span className={`err-level-badge ${err.level === 'warn' ? 'err-level-warn' : 'err-level-error'}`}>
+                          {err.level === 'warn' ? 'W' : 'E'}
+                        </span>
                         <span className="err-time">{formatTime(err.ts)}</span>
                         <span className="err-app">{err.app}</span>
                         {err.code && <span className="err-code">{err.code}</span>}
@@ -254,7 +257,10 @@ export default function Dashboard() {
           <>
             <Modal.Header closeButton>
               <Modal.Title className="d-flex align-items-center gap-2" style={{ fontSize: '1rem' }}>
-                <span className="badge bg-danger">ERROR</span>
+                {selected.level === 'warn'
+                  ? <span className="badge bg-warning text-dark">WARN</span>
+                  : <span className="badge bg-danger">ERROR</span>
+                }
                 {selected.code && (
                   <span className="badge" style={{ background: 'rgba(111,66,193,0.4)', color: '#a78bfa' }}>
                     {selected.code}

@@ -64,23 +64,21 @@ router.get('/', (c) => {
         codeCounts[event.code] = (codeCounts[event.code] || 0) + 1
       }
 
-      // Recent errors list
-      if (level === 'error') {
-        recentErrors.push({
-          ts: event.ts,
-          app,
-          level,
-          code: event.code ?? null,
-          msg: event.msg,
-          method: event.method ?? null,
-          path: event.path ?? null,
-          status: event.status ?? null,
-          duration: event.duration ?? null,
-          reqId: event.reqId ?? null,
-          userId: event.userId ?? null,
-          stack: event.stack ?? null,
-        })
-      }
+      // Recent errors & warnings list
+      recentErrors.push({
+        ts: event.ts,
+        app,
+        level,
+        code: event.code ?? null,
+        msg: event.msg,
+        method: event.method ?? null,
+        path: event.path ?? null,
+        status: event.status ?? null,
+        duration: event.duration ?? null,
+        reqId: event.reqId ?? null,
+        userId: event.userId ?? null,
+        stack: event.stack ?? null,
+      })
     }
   }
 
