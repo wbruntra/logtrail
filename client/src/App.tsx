@@ -4,15 +4,14 @@ import './styles/ansiColors.css'
 import './styles/modals.css'
 import Header from './components/Header'
 import LogViewer from './components/LogViewer'
-import SearchResults from './components/SearchResults'
-import ContextViewer from './components/ContextViewer'
 import { useLogFiles } from './hooks/useLogFiles'
 import { useLogStream } from './hooks/useLogStream'
 import { useLogHistory } from './hooks/useLogHistory'
 import { useAutoScroll } from './hooks/useAutoScroll'
-import { useLogSearch } from './hooks/useLogSearch'
 import { useBackendSearch } from './hooks/useBackendSearch'
 import type { LogLine } from './types/logTypes'
+
+type ViewMode = 'live' | 'search' | 'context'
 
 function App() {
   const { logFiles, selectedLog, setSelectedLog } = useLogFiles()
@@ -36,16 +35,6 @@ function App() {
   } = useAutoScroll(logs)
 
   const {
-    searchQuery,
-    setSearchQuery,
-    filteredLogs,
-    isSearching,
-    matchCount,
-    clearSearch,
-    debouncedQuery,
-  } = useLogSearch(logs)
-
-  const {
     searchResults,
     contextData,
     isSearching: isBackendSearching,
@@ -56,12 +45,41 @@ function App() {
     clearContext,
   } = useBackendSearch()
 
-  const [showSearchResults, setShowSearchResults] = useState(false)
-  const [showContextViewer, setShowContextViewer] = useState(() => {
-    return !!new URLSearchParams(window.location.search).get('line')
-  })
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    new URLSearchParams(window.location.search).get('line') ? 'context' : 'live'
+  )
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+
+  // Debounce search input → trigger backend search
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setDebouncedQuery('')
+      return
+    }
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim())
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
+    if (!debouncedQuery || !selectedLog) return
+    searchFile(selectedLog, debouncedQuery)
+    setViewMode('search')
+  }, [debouncedQuery, selectedLog])
+
+  // On initial load, if ?line=X is present, fetch context once the log is selected
+  useEffect(() => {
+    const urlLine = new URLSearchParams(window.location.search).get('line')
+    if (urlLine && selectedLog) {
+      getContext(selectedLog, parseInt(urlLine), 20)
+      setViewMode('context')
+    }
+  }, [selectedLog])
 
   const handleScroll = useCallback(() => {
+    if (viewMode !== 'live') return
     baseHandleScroll()
 
     const el = containerRef.current
@@ -78,6 +96,7 @@ function App() {
       historyLoadLock.current = false
     }
   }, [
+    viewMode,
     baseHandleScroll,
     containerRef,
     hasMoreHistory,
@@ -115,57 +134,54 @@ function App() {
       })
   }, [selectedLog])
 
-  const handleBackendSearch = useCallback(
-    async (query: string) => {
-      if (selectedLog) {
-        await searchFile(selectedLog, query)
-        setShowSearchResults(true)
-      }
-    },
-    [selectedLog, searchFile],
-  )
-
-  const handleCloseSearchResults = useCallback(() => {
-    setShowSearchResults(false)
-    clearResults()
-  }, [clearResults])
-
-  const handleResultClick = useCallback(
+  const handleLineNumberClick = useCallback(
     (lineNumber: number) => {
       if (!selectedLog) return
-      setShowSearchResults(false)
-      setShowContextViewer(true)
+      getContext(selectedLog, lineNumber, 20)
+      setViewMode('context')
       const params = new URLSearchParams(window.location.search)
       params.set('line', lineNumber.toString())
       window.history.replaceState(null, '', `?${params.toString()}`)
-      getContext(selectedLog, lineNumber, 20)
     },
     [selectedLog, getContext],
   )
 
-  const handleCloseContext = useCallback(() => {
-    setShowContextViewer(false)
+  const handleExitContext = useCallback(() => {
     clearContext()
     const params = new URLSearchParams(window.location.search)
     params.delete('line')
     window.history.replaceState(null, '', `?${params.toString()}`)
-  }, [clearContext])
+    setViewMode(debouncedQuery ? 'search' : 'live')
+  }, [clearContext, debouncedQuery])
 
-  const handleBackToResults = useCallback(() => {
-    setShowContextViewer(false)
-    setShowSearchResults(true)
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('')
+    setDebouncedQuery('')
+    setViewMode('live')
+    clearResults()
+    clearContext()
     const params = new URLSearchParams(window.location.search)
     params.delete('line')
     window.history.replaceState(null, '', `?${params.toString()}`)
-  }, [])
+  }, [clearResults, clearContext])
 
-  // On initial load, if ?line=X is in the URL, fetch context once the log is selected
-  useEffect(() => {
-    const urlLine = new URLSearchParams(window.location.search).get('line')
-    if (urlLine && selectedLog) {
-      getContext(selectedLog, parseInt(urlLine), 20)
-    }
-  }, [selectedLog])
+  const displayLogs: LogLine[] =
+    viewMode === 'search'
+      ? searchResults
+      : viewMode === 'context'
+        ? (contextData?.lines ?? [])
+        : logs
+
+  const bannerText =
+    viewMode === 'search'
+      ? isBackendSearching
+        ? `Searching for "${debouncedQuery}"…`
+        : `${searchResults.length} match${searchResults.length === 1 ? '' : 'es'} for "${debouncedQuery}" — click a line number to see context`
+      : viewMode === 'context'
+        ? isLoadingContext
+          ? 'Loading context…'
+          : `Context around line ${contextData?.targetLine}`
+        : null
 
   return (
     <div className="App" data-bs-theme="dark">
@@ -175,42 +191,38 @@ function App() {
         onLogChange={setSelectedLog}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onClearSearch={clearSearch}
-        isSearching={isSearching}
-        matchCount={matchCount}
-        totalCount={logs.length}
-        onBackendSearch={handleBackendSearch}
-        backendSearchLoading={isBackendSearching}
+        onClearSearch={handleClearSearch}
+        isSearching={isBackendSearching}
+        matchCount={searchResults.length}
       />
       <div className="main-content">
+        {bannerText && (
+          <div className="view-mode-banner">
+            <span className="view-mode-banner-text">{bannerText}</span>
+            <div className="view-mode-banner-actions">
+              {viewMode === 'context' && debouncedQuery && (
+                <button className="btn btn-sm btn-outline-secondary" onClick={handleExitContext}>
+                  ← Back to results
+                </button>
+              )}
+              <button className="btn btn-sm btn-outline-secondary" onClick={handleClearSearch}>
+                Exit search
+              </button>
+            </div>
+          </div>
+        )}
         <LogViewer
-          logs={filteredLogs}
-          autoScroll={autoScroll}
+          logs={displayLogs}
+          autoScroll={viewMode === 'live' ? autoScroll : false}
           onAutoScrollChange={setAutoScroll}
           onScroll={handleScroll}
-          loadingHistory={loadingHistory}
+          loadingHistory={viewMode === 'live' ? loadingHistory : false}
           containerRef={containerRef}
-          searchQuery={searchQuery}
-          debouncedQuery={debouncedQuery}
+          debouncedQuery={viewMode === 'search' ? debouncedQuery : ''}
+          onLineNumberClick={viewMode === 'search' ? handleLineNumberClick : undefined}
+          targetLineNumber={viewMode === 'context' ? contextData?.targetLine : undefined}
         />
       </div>
-
-      <SearchResults
-        results={searchResults}
-        query={searchQuery}
-        isLoading={isBackendSearching}
-        onResultClick={handleResultClick}
-        onClose={handleCloseSearchResults}
-        show={showSearchResults}
-      />
-
-      <ContextViewer
-        contextData={contextData}
-        isLoading={isLoadingContext}
-        show={showContextViewer}
-        onBack={handleBackToResults}
-        onClose={handleCloseContext}
-      />
     </div>
   )
 }

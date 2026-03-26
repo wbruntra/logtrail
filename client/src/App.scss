@@ -44,6 +44,33 @@
   background: transparent;
 }
 
+.view-mode-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 1.25rem;
+  background: rgba(91, 192, 222, 0.08);
+  border-bottom: 1px solid rgba(91, 192, 222, 0.2);
+  font-size: 0.85rem;
+  color: #5bc0de;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.view-mode-banner-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-mode-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .log-container {
   flex: 1 1 auto;
   width: 100%;

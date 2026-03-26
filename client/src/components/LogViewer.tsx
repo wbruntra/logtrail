@@ -16,6 +16,8 @@ interface LogViewerProps {
   containerRef: React.RefObject<HTMLDivElement | null>
   searchQuery?: string
   debouncedQuery?: string
+  onLineNumberClick?: (lineNumber: number) => void
+  targetLineNumber?: number
 }
 
 const STRUCTURED_LINE_CLASS: Record<StructuredEvent['level'], string> = {
@@ -42,6 +44,8 @@ const LogViewer: React.FC<LogViewerProps> = ({
   loadingHistory,
   containerRef,
   debouncedQuery = '',
+  onLineNumberClick,
+  targetLineNumber,
 }) => {
   const handleAutoScrollToggle = () => {
     if (!autoScroll && containerRef.current) {
@@ -57,6 +61,8 @@ const LogViewer: React.FC<LogViewerProps> = ({
         {logs.map((logLine, index) => {
           const structured = tryParseStructured(logLine.content)
 
+          const isTarget = targetLineNumber !== undefined && logLine.lineNumber === targetLineNumber
+
           if (structured) {
             const lineClass = STRUCTURED_LINE_CLASS[structured.level] ?? 'log-line-default'
             const msgHighlights = debouncedQuery
@@ -64,8 +70,13 @@ const LogViewer: React.FC<LogViewerProps> = ({
               : null
 
             return (
-              <div key={index} className={`${lineClass} structured-event`}>
-                <span className="log-line-number">{logLine.lineNumber}</span>
+              <div key={index} className={`${lineClass} structured-event${isTarget ? ' log-line-target' : ''}`}>
+                <span
+                  className={`log-line-number${onLineNumberClick ? ' log-line-number-clickable' : ''}`}
+                  onClick={() => onLineNumberClick?.(logLine.lineNumber)}
+                >
+                  {logLine.lineNumber}
+                </span>
                 <span className="structured-time">{formatTime(structured.ts)}</span>
                 <span className={`structured-level structured-level-${structured.level}`}>
                   {structured.level.toUpperCase()}
@@ -103,8 +114,13 @@ const LogViewer: React.FC<LogViewerProps> = ({
           const searchHighlights = highlightSearchMatches(logLine.content, debouncedQuery)
 
           return (
-            <div key={index} className={lineClass}>
-              <span className="log-line-number">{logLine.lineNumber}</span>
+            <div key={index} className={`${lineClass}${isTarget ? ' log-line-target' : ''}`}>
+              <span
+                className={`log-line-number${onLineNumberClick ? ' log-line-number-clickable' : ''}`}
+                onClick={() => onLineNumberClick?.(logLine.lineNumber)}
+              >
+                {logLine.lineNumber}
+              </span>
               {debouncedQuery ? (
                 searchHighlights.map((highlight, highlightIndex) => (
                   highlight.isMatch ? (
