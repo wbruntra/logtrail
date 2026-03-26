@@ -9,7 +9,7 @@ interface SearchResultsProps {
   results: SearchResult[]
   query: string
   isLoading: boolean
-  onLineClick?: () => void
+  onResultClick: (lineNumber: number) => void
   onClose: () => void
   show: boolean
 }
@@ -18,12 +18,13 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   results,
   query,
   isLoading,
+  onResultClick,
   onClose,
   show
 }) => {
   return (
-    <Modal 
-      show={show} 
+    <Modal
+      show={show}
       onHide={onClose}
       size="lg"
       centered
@@ -36,7 +37,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             'Searching entire file...'
           ) : (
             <>
-              Search Results for "{query}" 
+              Search Results for "{query}"
               <span className="badge bg-secondary ms-2">{results.length}</span>
             </>
           )}
@@ -60,14 +61,15 @@ const SearchResults: React.FC<SearchResultsProps> = ({
               return (
                 <div
                   key={index}
-                  className={`search-result-item ${getLogLineClass(parsedLine.level)}`}
+                  className={`search-result-item clickable ${getLogLineClass(parsedLine.level)}`}
+                  onClick={() => onResultClick(result.lineNumber)}
                 >
                   <div className="search-result-line-number">
                     Line {result.lineNumber}
                   </div>
                   <div className="search-result-content">
                     {parsedLine.segments.map((segment, segIndex) => (
-                      <span 
+                      <span
                         key={segIndex}
                         className={segment.className}
                       >

@@ -5,6 +5,7 @@ import './styles/modals.css'
 import Header from './components/Header'
 import LogViewer from './components/LogViewer'
 import SearchResults from './components/SearchResults'
+import ContextViewer from './components/ContextViewer'
 import { useLogFiles } from './hooks/useLogFiles'
 import { useLogStream } from './hooks/useLogStream'
 import { useLogHistory } from './hooks/useLogHistory'
@@ -46,12 +47,19 @@ function App() {
 
   const {
     searchResults,
+    contextData,
     isSearching: isBackendSearching,
+    isLoadingContext,
     searchFile,
+    getContext,
     clearResults,
+    clearContext,
   } = useBackendSearch()
 
   const [showSearchResults, setShowSearchResults] = useState(false)
+  const [showContextViewer, setShowContextViewer] = useState(() => {
+    return !!new URLSearchParams(window.location.search).get('line')
+  })
 
   const handleScroll = useCallback(() => {
     baseHandleScroll()
@@ -122,6 +130,43 @@ function App() {
     clearResults()
   }, [clearResults])
 
+  const handleResultClick = useCallback(
+    (lineNumber: number) => {
+      if (!selectedLog) return
+      setShowSearchResults(false)
+      setShowContextViewer(true)
+      const params = new URLSearchParams(window.location.search)
+      params.set('line', lineNumber.toString())
+      window.history.replaceState(null, '', `?${params.toString()}`)
+      getContext(selectedLog, lineNumber, 20)
+    },
+    [selectedLog, getContext],
+  )
+
+  const handleCloseContext = useCallback(() => {
+    setShowContextViewer(false)
+    clearContext()
+    const params = new URLSearchParams(window.location.search)
+    params.delete('line')
+    window.history.replaceState(null, '', `?${params.toString()}`)
+  }, [clearContext])
+
+  const handleBackToResults = useCallback(() => {
+    setShowContextViewer(false)
+    setShowSearchResults(true)
+    const params = new URLSearchParams(window.location.search)
+    params.delete('line')
+    window.history.replaceState(null, '', `?${params.toString()}`)
+  }, [])
+
+  // On initial load, if ?line=X is in the URL, fetch context once the log is selected
+  useEffect(() => {
+    const urlLine = new URLSearchParams(window.location.search).get('line')
+    if (urlLine && selectedLog) {
+      getContext(selectedLog, parseInt(urlLine), 20)
+    }
+  }, [selectedLog])
+
   return (
     <div className="App" data-bs-theme="dark">
       <Header
@@ -154,9 +199,17 @@ function App() {
         results={searchResults}
         query={searchQuery}
         isLoading={isBackendSearching}
-        onLineClick={handleCloseSearchResults}
+        onResultClick={handleResultClick}
         onClose={handleCloseSearchResults}
         show={showSearchResults}
+      />
+
+      <ContextViewer
+        contextData={contextData}
+        isLoading={isLoadingContext}
+        show={showContextViewer}
+        onBack={handleBackToResults}
+        onClose={handleCloseContext}
       />
     </div>
   )

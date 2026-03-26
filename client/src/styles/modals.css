@@ -83,6 +83,12 @@
   background-color: rgba(0, 0, 0, 0.5);
 }
 
+/* Context target line highlight */
+.context-target-line {
+  outline: 2px solid rgba(255, 193, 7, 0.6);
+  background-color: rgba(255, 193, 7, 0.08) !important;
+}
+
 /* Search results list styling within modal */
 .search-results-list {
   display: flex;
