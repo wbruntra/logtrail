@@ -13,6 +13,10 @@ function hourBucket(isoStr) {
 
 router.get('/', (c) => {
   const hours = Math.min(parseInt(c.req.query('hours') ?? '24', 10) || 24, 72)
+  const levelsParam = c.req.query('levels') ?? 'error,warn'
+  const levels = levelsParam.split(',').map((l) => l.trim()).filter((l) => l === 'error' || l === 'warn')
+  const activelevels = levels.length > 0 ? new Set(levels) : new Set(['error', 'warn'])
+
   const now = new Date()
   const cutoff = new Date(now.getTime() - hours * 60 * 60 * 1000)
 
@@ -64,7 +68,8 @@ router.get('/', (c) => {
         codeCounts[event.code] = (codeCounts[event.code] || 0) + 1
       }
 
-      // Recent errors & warnings list
+      // Recent errors & warnings list (filtered by requested levels)
+      if (!activelevels.has(level)) continue
       recentErrors.push({
         ts: event.ts,
         app,

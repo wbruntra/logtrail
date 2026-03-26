@@ -41,17 +41,20 @@ export interface DashboardData {
   recentErrors: RecentError[]
 }
 
-export function useDashboard(hours: number) {
+export function useDashboard(hours: number, levels: string[]) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const levelsKey = levels.slice().sort().join(',')
 
   const fetch_ = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/dashboard?hours=${hours}`, {
+      const params = new URLSearchParams({ hours: String(hours), levels: levelsKey })
+      const res = await fetch(`/api/dashboard?${params}`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         credentials: 'include',
       })
@@ -62,7 +65,7 @@ export function useDashboard(hours: number) {
     } finally {
       setLoading(false)
     }
-  }, [hours])
+  }, [hours, levelsKey])
 
   useEffect(() => {
     fetch_()

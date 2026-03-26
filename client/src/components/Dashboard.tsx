@@ -25,7 +25,12 @@ export default function Dashboard() {
   const [selected, setSelected] = useState<RecentError | null>(null)
   const [showErrors, setShowErrors] = useState(true)
   const [showWarns, setShowWarns] = useState(true)
-  const { data, loading, error } = useDashboard(hours)
+
+  const levels = [
+    ...(showErrors ? ['error'] : []),
+    ...(showWarns ? ['warn'] : []),
+  ]
+  const { data, loading, error } = useDashboard(hours, levels)
 
   const maxBarValue = data
     ? Math.max(...data.byHour.map((h) => h.errors + h.warns), 1)
@@ -234,12 +239,10 @@ export default function Dashboard() {
                       </button>
                     </div>
                   </div>
-                  {data.recentErrors.filter((e) => (e.level === 'error' ? showErrors : showWarns)).length === 0 ? (
+                  {data.recentErrors.length === 0 ? (
                     <div className="dashboard-empty">No {!showErrors ? 'warnings' : !showWarns ? 'errors' : 'errors or warnings'} in this period</div>
                   ) : (
-                    data.recentErrors
-                      .filter((e) => (e.level === 'error' ? showErrors : showWarns))
-                      .map((err, i) => (
+                    data.recentErrors.map((err, i) => (
                         <div key={i} className="error-row error-row-clickable" onClick={() => setSelected(err)}>
                           <span className={`err-level-badge ${err.level === 'warn' ? 'err-level-warn' : 'err-level-error'}`}>
                             {err.level === 'warn' ? 'W' : 'E'}
