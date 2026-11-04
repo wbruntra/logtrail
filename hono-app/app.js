@@ -27,6 +27,6 @@ const dashboardRouter = require('./routes/dashboard.js')
 app.route('/api/dashboard', dashboardRouter)
 
 const mcpRouter = require('./routes/mcp.js')
-app.route('/mcp', mcpRouter)
+app.route('/api/mcp', mcpRouter)
 
 module.exports = app
