@@ -1,0 +1,10 @@
+---
+# logtrail.lunaparkdigital.com on gaybor_new (values taken from
+# example.nginx.conf; correct them here if the real setup differs).
+project_root: /home/william/web/logtrail
+target_branch: master
+pm2_name: logtrail
+pm2_node_version: v24.12.0
+# Must match PORT in ecosystem.config.cjs and the nginx proxy_pass.
+app_port: 11411
+public_url: https://logtrail.lunaparkdigital.com

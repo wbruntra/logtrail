@@ -1,5 +1,6 @@
 const { verify } = require('hono/jwt')
 const { getCookie } = require('hono/cookie')
+const { timingSafeEqual } = require('crypto')
 const secrets = require('@/secrets')
 
 /**
@@ -46,6 +47,26 @@ async function requireLogin(c, next) {
 }
 
 /**
+ * Static bearer-token authentication for the MCP endpoint.
+ * Only secrets.mcpToken is accepted; web login tokens are not.
+ */
+async function requireMcpToken(c, next) {
+  const authHeader = c.req.header('Authorization') || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  const expected = secrets.mcpToken
+
+  if (expected && token) {
+    const a = Buffer.from(token)
+    const b = Buffer.from(expected)
+    if (a.length === b.length && timingSafeEqual(a, b)) {
+      return next()
+    }
+  }
+
+  return c.json({ error: 'Invalid or missing MCP token' }, 401)
+}
+
+/**
  * Get authentication middleware
  * @returns {Function} Hono middleware function
  */
@@ -53,4 +74,4 @@ function getAuthMiddleware() {
   return requireLogin
 }
 
-module.exports = { requireLogin, getAuthMiddleware }
+module.exports = { requireLogin, requireMcpToken, getAuthMiddleware }

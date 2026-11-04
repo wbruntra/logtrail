@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "preserve",
     "lib": ["ES2022"],
     "allowJs": true,
     "checkJs": false,
@@ -13,14 +13,13 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
-    "types": ["node"],
-    "baseUrl": ".",
+    "moduleResolution": "bundler",
+    "types": ["bun"],
     "paths": {
       "@/*": ["./*"],
       "@hono-app/*": ["./hono-app/*"]
     }
   },
   "include": ["**/*.ts", "**/*.js", "ecosystem.config.cjs"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "client"]
 }
