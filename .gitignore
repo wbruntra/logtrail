@@ -47,3 +47,4 @@ ecosystem.config.cjs
 agent/*.yaml
 
 ingested-logs/*
+data/raw-logs/*
