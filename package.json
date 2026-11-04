@@ -9,7 +9,7 @@
     "client": "cd client && bun run dev",
     "start": "bun bin/www",
     "verify:ingested-stream": "bun scripts/verify-ingested-stream.js",
-    "deploy": "ansible-playbook ansible/deploy.yml -e deployment=production"
+    "deploy": "ansible-playbook -i ansible/inventory.yml ansible/deploy.yml -e deployment=production"
   },
   "keywords": [],
   "author": "",

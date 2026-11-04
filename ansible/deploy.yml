@@ -51,7 +51,9 @@
           # pm2 restart keeps a process's original script path, so a changed
           # entry file needs a delete and start.
           shell: |
+            set -e
             want="{{ project_root }}/$(bun -e "console.log(require('./ecosystem.config.cjs').apps[0].script)")"
+            [ -f ecosystem.config.cjs ] || { echo 'ecosystem.config.cjs missing' >&2; exit 1; }
             have=$(pm2 jlist | bun -e "const l = await Bun.stdin.json(); console.log(l.find((a) => a.name === '{{ pm2_name }}')?.pm2_env.pm_exec_path ?? '')")
             if [ -n "$have" ] && [ "$have" != "$want" ]; then
               pm2 delete {{ pm2_name }} && echo "recreated: $have -> $want"
