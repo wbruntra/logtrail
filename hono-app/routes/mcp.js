@@ -7,7 +7,8 @@ const { z } = require('zod')
 const path = require('path')
 const { getLogConfig } = require('@/services/config')
 const { getLogHistory } = require('@/services/history-file')
-const { listApps, getIngestedHistory, searchIngested } = require('@/services/ingest-store')
+const { listApps, getIngestedHistory } = require('@/services/ingest-store')
+const { searchLogs } = require('@/services/log-search')
 const { getDashboard } = require('@/services/dashboard')
 const { requireMcpToken } = require('@/hono-app/middleware/auth')
 
@@ -113,12 +114,25 @@ function createMcpServer() {
     'search_logs',
     {
       description:
-        'Search an ingested log source for a substring or regex. Returns matching lines with line numbers (usable with read_logs "before").',
+        'Search ingested logs for a substring or regex, across ALL apps by default or one app. Optionally filter by request ID and/or a time window, and return surrounding lines for each match. Returns the newest matches in chronological order, each with app, lineNumber (usable with read_logs "before") and timestamp. At least one of query, reqId, since or until is required.',
       inputSchema: {
-        source: z.string().describe('Ingested source path, e.g. "ingested:myapp"'),
-        query: z.string().min(1),
+        source: z
+          .string()
+          .optional()
+          .describe('Ingested source path, e.g. "ingested:myapp". Omit to search every app.'),
+        query: z.string().optional(),
         regex: z.boolean().optional(),
         caseSensitive: z.boolean().optional(),
+        reqId: z.string().optional().describe('Only lines containing this request ID'),
+        since: z.string().optional().describe('ISO timestamp, inclusive lower bound'),
+        until: z.string().optional().describe('ISO timestamp, inclusive upper bound'),
+        context: z
+          .number()
+          .int()
+          .min(0)
+          .max(20)
+          .optional()
+          .describe('Lines of context before and after each match (default 0)'),
         limit: z
           .number()
           .int()
@@ -128,19 +142,24 @@ function createMcpServer() {
           .describe('Max matches, newest kept (default 100)'),
       },
     },
-    async ({ source, query, regex = false, caseSensitive = false, limit = 100 }) => {
-      if (!source.startsWith('ingested:')) {
+    async ({ source, query, reqId, since, until, ...opts }) => {
+      if (!query && !reqId && !since && !until) {
+        return fail('Provide at least one of query, reqId, since or until')
+      }
+      if (source && !source.startsWith('ingested:')) {
         return fail(
           'search_logs only supports ingested sources; use read_logs for configured files',
         )
       }
-      const results = searchIngested(source.slice('ingested:'.length), query, regex, caseSensitive)
-      if (results.error) return fail(results.error)
-      return text({
-        totalMatches: results.length,
-        truncated: results.length > limit,
-        results: results.slice(-limit),
+      const result = searchLogs({
+        app: source?.slice('ingested:'.length),
+        query,
+        reqId,
+        since,
+        until,
+        ...opts,
       })
+      return result.error ? fail(result.error) : text(result)
     },
   )
 
