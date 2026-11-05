@@ -101,6 +101,25 @@ describe('issues', () => {
     expect(payment).toMatchObject({ msg: 'Payment declined', count: 1, users: 0, releases: [] })
   })
 
+  it('limits to one app and a number of issues, and can leave out stacks', async () => {
+    await insertEvents('shop', [
+      event({ msg: 'one', stack: 'Error\n    at x (/app/a.ts:1:1)' }),
+      event({ msg: 'two' }),
+    ])
+    await insertEvents('auth', [event({ msg: 'three' })])
+
+    const d = await getDashboard({ app: 'shop', issueLimit: 1, stacks: false })
+    expect(d.totals).toEqual({ errors: 2, warns: 0 })
+    expect(d.byApp.map((a) => a.app)).toEqual(['shop'])
+    expect(d.issues).toHaveLength(1)
+    expect(d.recentErrors.map((e) => [e.msg, 'stack' in e, 'hasStack' in e && e.hasStack])).toEqual(
+      [
+        ['two', false, false],
+        ['one', false, true],
+      ],
+    )
+  })
+
   it('returns an issue with its occurrences, newest first', async () => {
     await insertEvents('shop', [
       event({ msg: 'Order 1 not found', reqId: 'a', stack: 'Error\n    at x (/app/a.ts:1:1)' }),

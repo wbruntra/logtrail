@@ -1,7 +1,16 @@
 import { db } from '@database/db'
-import type { EventRow } from '@database/schema'
+import type { EventRow, Level } from '@database/schema'
+import type { EventView } from '@/shared/api-types'
 import { sql } from 'kysely'
-import { getNeighbors, listApps, type LogLine, SEARCH_TEXT, toLine } from './event-query'
+import {
+  getNeighbors,
+  type LevelFilter,
+  listApps,
+  type LogLine,
+  SEARCH_TEXT,
+  toEventView,
+  toLine,
+} from './event-query'
 
 // Searches ingested events. Plain queries match in SQL against the event's text
 // fields; regex queries are narrowed by the other filters in SQL, then matched in
@@ -20,6 +29,16 @@ export interface SearchOptions {
   /** ISO timestamps, inclusive */
   since?: string
   until?: string
+  /** Levels, with 'none' for the agent's unstructured lines */
+  levels?: LevelFilter[]
+  /** An exact HTTP status, or a class such as '5xx' */
+  status?: number | string
+  code?: string
+  userId?: string
+  /** Route pattern, exact, e.g. /users/:id */
+  route?: string
+  /** Request path prefix, e.g. /api/sheets */
+  pathPrefix?: string
   /** Lines of the same app to include before and after each match */
   context?: number
   limit?: number
@@ -31,9 +50,16 @@ export interface SearchMatch extends LogLine {
   context?: LogLine[]
 }
 
-export type SearchResult =
-  | { appsSearched: string[]; totalMatches: number; truncated: boolean; results: SearchMatch[] }
-  | { error: string }
+export interface EventMatch extends EventView {
+  context?: EventView[]
+}
+
+type Found<T> = { appsSearched: string[]; totalMatches: number; truncated: boolean; results: T[] }
+
+export type SearchResult = Found<SearchMatch> | { error: string }
+export type EventSearchResult = Found<EventMatch> | { error: string }
+
+const STATUS_CLASS = /^([1-5])xx$/i
 
 function isoBound(value: string | undefined): string | null | undefined {
   if (!value) return undefined
@@ -41,8 +67,8 @@ function isoBound(value: string | undefined): string | null | undefined {
   return Number.isNaN(ms) ? null : new Date(ms).toISOString()
 }
 
-/** Returns the newest `limit` matches in chronological order. */
-export async function searchLogs({
+/** The newest `limit` matching rows in chronological order, with the count of all matches. */
+async function findMatches({
   app,
   query,
   regex = false,
@@ -50,9 +76,14 @@ export async function searchLogs({
   reqId,
   since,
   until,
-  context = 0,
+  levels,
+  status,
+  code,
+  userId,
+  route,
+  pathPrefix,
   limit = 100,
-}: SearchOptions): Promise<SearchResult> {
+}: SearchOptions): Promise<{ rows: EventRow[]; totalMatches: number } | { error: string }> {
   let re: RegExp | undefined
   if (query && regex) {
     try {
@@ -67,6 +98,12 @@ export async function searchLogs({
     return { error: 'since/until must be ISO timestamps' }
   }
 
+  const statusClass = typeof status === 'string' ? STATUS_CLASS.exec(status) : null
+  const statusCode = typeof status === 'string' && !statusClass ? Number(status) : status
+  if (typeof statusCode === 'number' && !Number.isInteger(statusCode)) {
+    return { error: "status must be a number or a class such as '5xx'" }
+  }
+
   let filtered = db.selectFrom('events')
   if (app) filtered = filtered.where('app', '=', app)
   if (sinceIso) filtered = filtered.where('ts', '>=', sinceIso)
@@ -78,6 +115,27 @@ export async function searchLogs({
         eb.and([eb('level', 'is', null), eb(sql`instr(msg, ${reqId})`, '>', 0)]),
       ]),
     )
+  }
+  if (levels?.length) {
+    const named = levels.filter((l): l is Level => l !== 'none')
+    filtered = filtered.where((eb) =>
+      eb.or([
+        ...(named.length ? [eb('level', 'in', named)] : []),
+        ...(levels.includes('none') ? [eb('level', 'is', null)] : []),
+      ]),
+    )
+  }
+  if (statusClass) {
+    const floor = Number(statusClass[1]) * 100
+    filtered = filtered.where('status', '>=', floor).where('status', '<', floor + 100)
+  } else if (typeof statusCode === 'number') {
+    filtered = filtered.where('status', '=', statusCode)
+  }
+  if (code) filtered = filtered.where('code', '=', code)
+  if (userId) filtered = filtered.where('user_id', '=', userId)
+  if (route) filtered = filtered.where('route', '=', route)
+  if (pathPrefix) {
+    filtered = filtered.where(sql<boolean>`substr(path, 1, ${pathPrefix.length}) = ${pathPrefix}`)
   }
   if (query && !re) {
     filtered = filtered.where(
@@ -115,22 +173,46 @@ export async function searchLogs({
     totalMatches = n
   }
 
-  const chronological = newest.sort((a, b) => a.ts.localeCompare(b.ts) || a.id - b.id)
+  const rows = newest.sort((a, b) => a.ts.localeCompare(b.ts) || a.id - b.id)
+  return { rows, totalMatches }
+}
+
+async function search<T>(
+  options: SearchOptions,
+  toMatch: (row: EventRow, context: EventRow[]) => T,
+): Promise<Found<T> | { error: string }> {
+  const found = await findMatches(options)
+  if ('error' in found) return found
+  const context = options.context ?? 0
   const results = await Promise.all(
-    chronological.map(async (row): Promise<SearchMatch> => {
-      const match: SearchMatch = { app: row.app, ts: row.ts, ...toLine(row) }
-      if (context > 0) {
-        const { before, after } = await getNeighbors(row.app, row.id, context)
-        match.context = [...before, ...after].map(toLine)
-      }
-      return match
+    found.rows.map(async (row) => {
+      if (context <= 0) return toMatch(row, [])
+      const { before, after } = await getNeighbors(row.app, row.id, context)
+      return toMatch(row, [...before, ...after])
     }),
   )
-
   return {
-    appsSearched: app ? [app] : await listApps(),
-    totalMatches,
-    truncated: totalMatches > results.length,
+    appsSearched: options.app ? [options.app] : await listApps(),
+    totalMatches: found.totalMatches,
+    truncated: found.totalMatches > results.length,
     results,
   }
+}
+
+/** The newest `limit` matches in chronological order, rendered as log lines. */
+export function searchLogs(options: SearchOptions): Promise<SearchResult> {
+  return search(options, (row, context) => ({
+    app: row.app,
+    ts: row.ts,
+    ...toLine(row),
+    ...(options.context && { context: context.map(toLine) }),
+  }))
+}
+
+/** The newest `limit` matches in chronological order, as parsed events. */
+export function searchEvents(options: SearchOptions): Promise<EventSearchResult> {
+  return search(options, (row, context) => ({
+    ...toEventView(row),
+    ...(options.context && { context: context.map(toEventView) }),
+  }))
 }

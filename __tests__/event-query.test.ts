@@ -3,9 +3,9 @@ import app from '@/hono-app/app'
 import { parseLine } from '@/scripts/import-ingested-logs'
 import secrets from '@/secrets'
 import type { IngestEvent } from '@/services/event-schema'
-import { getContext, getHistory, getTail, listApps } from '@/services/event-query'
+import { appStats, getContext, getHistory, getTail, listApps } from '@/services/event-query'
 import { insertEvents, insertLines } from '@/services/event-store'
-import { searchLogs } from '@/services/log-search'
+import { searchEvents, searchLogs } from '@/services/log-search'
 import { deleteExpired } from '@/services/retention'
 import { beforeEach, describe, expect, it } from 'bun:test'
 
@@ -137,6 +137,56 @@ describe('searchLogs', () => {
       expect(ids(r.results)).toEqual(lines.slice(7).map((l) => l.id))
       expect(ids(r.results[2].context!)).toEqual([lines[8].id])
     }
+  })
+})
+
+describe('searchEvents', () => {
+  beforeEach(async () => {
+    await insertEvents('api', [
+      event({ msg: 'not found', status: 404, path: '/api/sheets/abc', route: '/api/sheets/:id' }),
+      event({ msg: 'crashed', status: 500, path: '/api/pay', code: 'CARD', userId: 'u1' }),
+      event({ msg: 'slow', level: 'warn', status: 200, path: '/api/sheets' }),
+    ])
+    await insertLines('agent', ['GET /api/sheets 500'])
+  })
+
+  const msgs = async (options: Parameters<typeof searchEvents>[0]) =>
+    (await ok(await searchEvents(options))).results.map((e) => e.msg)
+
+  it('returns parsed events', async () => {
+    const [e] = (await ok(await searchEvents({ code: 'CARD' }))).results
+    expect(e).toMatchObject({ app: 'api', msg: 'crashed', status: 500, userId: 'u1' })
+  })
+
+  it('filters by level, status, code, user, route and path prefix', async () => {
+    expect(await msgs({ levels: ['warn'] })).toEqual(['slow'])
+    expect(await msgs({ levels: ['none'] })).toEqual(['GET /api/sheets 500'])
+    expect(await msgs({ status: 404 })).toEqual(['not found'])
+    expect(await msgs({ status: '5xx' })).toEqual(['crashed'])
+    expect(await msgs({ status: '4XX' })).toEqual(['not found'])
+    expect(await msgs({ userId: 'u1' })).toEqual(['crashed'])
+    expect(await msgs({ route: '/api/sheets/:id' })).toEqual(['not found'])
+    expect(await msgs({ pathPrefix: '/api/sheets' })).toEqual(['not found', 'slow'])
+    expect(await searchEvents({ status: 'teapot' })).toEqual({
+      error: "status must be a number or a class such as '5xx'",
+    })
+  })
+
+  it('adds context as events', async () => {
+    const [match] = (await ok(await searchEvents({ code: 'CARD', context: 1 }))).results
+    expect(match.context!.map((e) => e.msg)).toEqual(['not found', 'slow'])
+  })
+})
+
+describe('appStats', () => {
+  it('counts structured events and agent lines per app', async () => {
+    await insertEvents('api', [event({}), event({ level: 'info' })])
+    await insertLines('api', ['plain'])
+    await insertLines('agent', ['plain'])
+    expect(await appStats()).toMatchObject([
+      { app: 'agent', eventCount: 1, structured: 0, unstructured: 1 },
+      { app: 'api', eventCount: 3, structured: 2, unstructured: 1 },
+    ])
   })
 })
 

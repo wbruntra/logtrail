@@ -25,6 +25,34 @@ export async function listApps(): Promise<string[]> {
   return rows.map((r) => r.app)
 }
 
+export interface AppStats {
+  app: string
+  eventCount: number
+  /** Events from the SDK or ingest API, with level and fields */
+  structured: number
+  /** Plain text lines shipped by the agent */
+  unstructured: number
+  firstSeen: string
+  lastSeen: string
+}
+
+/** Per app: retained event counts and the oldest and newest event times. */
+export async function appStats(): Promise<AppStats[]> {
+  const rows = await db
+    .selectFrom('events')
+    .select((eb) => [
+      'app',
+      eb.fn.countAll<number>().as('eventCount'),
+      eb.fn.count<number>('level').as('structured'),
+      eb.fn.min('ts').as('firstSeen'),
+      eb.fn.max('ts').as('lastSeen'),
+    ])
+    .groupBy('app')
+    .orderBy('app')
+    .execute()
+  return rows.map((r) => ({ ...r, unstructured: r.eventCount - r.structured }))
+}
+
 async function countLines(app: string): Promise<number> {
   const { n } = await db
     .selectFrom('events')

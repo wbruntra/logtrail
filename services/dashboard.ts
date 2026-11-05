@@ -14,6 +14,12 @@ export interface DashboardOptions {
   /** Levels for recentErrors and issues: comma-separated or an array (default both) */
   levels?: string | string[]
   limit?: number | string
+  /** Limit to one app; all apps by default */
+  app?: string
+  /** Max issues, most recently seen first (default 50) */
+  issueLimit?: number | string
+  /** Include stack traces in recentErrors (default true) */
+  stacks?: boolean
 }
 
 function int(value: number | string | undefined, fallback: number, max: number): number {
@@ -29,7 +35,7 @@ function alertLevels(value: string | string[] | undefined): AlertLevel[] {
 
 const hourOf = (ts: string) => `${ts.slice(0, 13)}:00:00.000Z`
 
-function recentError(row: EventRow) {
+function recentError(row: EventRow, stacks: boolean) {
   return {
     id: row.id,
     fingerprint: row.fingerprint,
@@ -44,21 +50,21 @@ function recentError(row: EventRow) {
     duration: row.duration_ms,
     reqId: row.req_id,
     userId: row.user_id,
-    stack: row.stack,
+    ...(stacks ? { stack: row.stack } : { hasStack: row.stack !== null }),
   }
 }
 
 export async function getDashboard(options: DashboardOptions = {}) {
   const hours = int(options.hours, 24, MAX_HOURS)
   const limit = int(options.limit, 25, 200)
+  const issueLimit = int(options.issueLimit, 50, 250)
   const levels = alertLevels(options.levels)
+  const { app } = options
 
   const now = new Date()
   const since = new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString()
-  const inWindow = db
-    .selectFrom('events')
-    .where('level', 'in', ALERT_LEVELS)
-    .where('ts', '>=', since)
+  let inWindow = db.selectFrom('events').where('level', 'in', ALERT_LEVELS).where('ts', '>=', since)
+  if (app) inWindow = inWindow.where('app', '=', app)
   const count = sql<number>`count(*)`.as('count')
 
   const [byAppLevel, byHourLevel, topCodes, recent, issues] = await Promise.all([
@@ -82,7 +88,7 @@ export async function getDashboard(options: DashboardOptions = {}) {
       .orderBy('id', 'desc')
       .limit(limit)
       .execute(),
-    issueSummaries({ levels, since, limit: 50 }),
+    issueSummaries({ app, levels, since, limit: issueLimit }),
   ])
 
   const totals = { errors: 0, warns: 0 }
@@ -107,12 +113,13 @@ export async function getDashboard(options: DashboardOptions = {}) {
 
   return {
     period: hours,
+    since,
     totals,
     byApp: [...apps.values()].sort((a, b) => b.errors - a.errors || b.warns - a.warns),
     byHour: [...byHour.values()],
     topCodes,
     issues,
-    recentErrors: recent.map(recentError),
+    recentErrors: recent.map((row) => recentError(row, options.stacks ?? true)),
   }
 }
 

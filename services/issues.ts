@@ -250,6 +250,7 @@ async function breakdown(
 export async function getIssueDetail(
   fingerprint: string,
   hours?: number | string,
+  occurrenceLimit = 25,
 ): Promise<IssueDetail | null> {
   const window = makeWindow(hours)
   const [all] = await issueSummaries({ fingerprints: [fingerprint], limit: 1 })
@@ -271,7 +272,7 @@ export async function getIssueDetail(
       breakdown(fingerprint, window.since, 'path'),
       breakdown(fingerprint, window.since, 'status'),
       breakdown(fingerprint, window.since, 'user_id'),
-      listEvents({ fingerprint, limit: 25 }),
+      listEvents({ fingerprint, limit: occurrenceLimit }),
       statesOf([fingerprint]),
     ])
 
