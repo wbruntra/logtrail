@@ -1,6 +1,9 @@
 #!/usr/bin/env bun
 
-const app = require('../app')
+import { migrateToLatest } from '@database/migrate'
+import app from '../app'
+
+await migrateToLatest()
 
 const port = parseInt(process.env.PORT || '12070', 10)
 

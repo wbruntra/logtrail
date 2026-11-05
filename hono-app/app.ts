@@ -1,6 +1,11 @@
-const { Hono } = require('hono')
-const { createLogger } = require('./middleware/customLogger')
-const { cleanupOldFiles } = require('@/services/ingest-store')
+import { cleanupOldFiles } from '@/services/ingest-store'
+import { Hono } from 'hono'
+import { createLogger } from './middleware/customLogger'
+import dashboardRouter from './routes/dashboard'
+import appRouter from './routes/index.js'
+import ingestRouter from './routes/ingest'
+import logsRouter from './routes/logs.js'
+import mcpRouter from './routes/mcp'
 
 const app = new Hono()
 
@@ -14,19 +19,10 @@ setInterval(cleanupOldFiles, 24 * 60 * 60 * 1000)
 app.use('*', createLogger({ ignoredPaths: ['/api/ingest'] }))
 
 // Mount the API routes
-const appRouter = require('./routes/index.js')
 app.route('/api', appRouter)
-
-const logsRouter = require('./routes/logs.js')
 app.route('/api/logs', logsRouter)
-
-const ingestRouter = require('./routes/ingest.js')
 app.route('/api/ingest', ingestRouter)
-
-const dashboardRouter = require('./routes/dashboard.js')
 app.route('/api/dashboard', dashboardRouter)
-
-const mcpRouter = require('./routes/mcp.js')
 app.route('/api/mcp', mcpRouter)
 
-module.exports = app
+export default app

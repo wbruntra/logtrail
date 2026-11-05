@@ -46,6 +46,7 @@ ecosystem.config.js
 agent/*.yaml
 
 ingested-logs/*
+data/*
 data/raw-logs/*
 
 # Local secrets bundle pushed by ansible/deploy.yml

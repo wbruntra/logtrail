@@ -1,0 +1,7 @@
+[fmt]
+printWidth = 100
+semi = false
+singleQuote = true
+
+[test]
+preload = ["./__tests__/setup.ts"]

@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'logtrail-central',
-      script: 'hono-app/bin/www',
+      script: 'hono-app/bin/www.ts',
       interpreter: 'bun',
       cwd: __dirname,
       watch: false,

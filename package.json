@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "dev": "bun run --parallel backend client",
-    "backend": "bun --watch hono-app/bin/www",
+    "backend": "bun --watch hono-app/bin/www.ts",
     "client": "cd client && bun run dev",
-    "start": "bun bin/www",
-    "verify:ingested-stream": "bun scripts/verify-ingested-stream.js",
+    "start": "bun hono-app/bin/www.ts",
+    "verify:ingested-stream": "bun scripts/verify-ingested-stream.ts",
     "deploy": "ansible-playbook -i ansible/inventory.yml ansible/deploy.yml -e deployment=production"
   },
   "keywords": [],
@@ -22,9 +22,13 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "hono": "^4.12.0",
+    "kysely": "^0.29.8",
+    "kysely-bun-dialects": "^1.0.0",
     "morgan": "^1.10.1",
-    "supertest": "^7.1.4",
     "tail-stream": "^0.3.4",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
   }
 }

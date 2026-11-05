@@ -1,14 +1,15 @@
 #!/usr/bin/env bun
 
-const fs = require('fs')
-const path = require('path')
-const app = require('../hono-app/app')
-const secrets = require('../secrets')
-const { getTodayFile } = require('../services/ingest-store')
+import fs from 'node:fs'
+import path from 'node:path'
+import { migrateToLatest } from '@database/migrate'
+import app from '@/hono-app/app'
+import secrets from '@/secrets'
+import { getTodayFile } from '@/services/ingest-store'
 
 const decoder = new TextDecoder()
 
-async function login(baseUrl) {
+async function login(baseUrl: string): Promise<string> {
   const res = await fetch(`${baseUrl}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -19,7 +20,7 @@ async function login(baseUrl) {
     throw new Error(`Login failed with HTTP ${res.status}`)
   }
 
-  const data = await res.json()
+  const data = (await res.json()) as { token?: string }
   if (!data.token) {
     throw new Error('Login response did not include a token')
   }
@@ -27,7 +28,7 @@ async function login(baseUrl) {
   return data.token
 }
 
-async function ingest(baseUrl, appName, lines) {
+async function ingest(baseUrl: string, appName: string, lines: string[]) {
   const res = await fetch(`${baseUrl}/api/ingest`, {
     method: 'POST',
     headers: {
@@ -45,18 +46,27 @@ async function ingest(baseUrl, appName, lines) {
   return res.json()
 }
 
-async function waitForStreamedLine(baseUrl, token, appName, expectedSubstring, timeoutMs = 8000) {
+async function waitForStreamedLine(
+  baseUrl: string,
+  token: string,
+  appName: string,
+  expectedSubstring: string,
+  timeoutMs = 8000,
+) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const res = await fetch(`${baseUrl}/api/logs/stream?file=${encodeURIComponent(`ingested:${appName}`)}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'text/event-stream',
+    const res = await fetch(
+      `${baseUrl}/api/logs/stream?file=${encodeURIComponent(`ingested:${appName}`)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'text/event-stream',
+        },
+        signal: controller.signal,
       },
-      signal: controller.signal,
-    })
+    )
 
     if (!res.ok || !res.body) {
       throw new Error(`Stream request failed with HTTP ${res.status}`)
@@ -103,6 +113,8 @@ async function waitForStreamedLine(baseUrl, token, appName, expectedSubstring, t
 }
 
 async function main() {
+  await migrateToLatest()
+
   const server = Bun.serve({
     port: 0,
     fetch: app.fetch,
@@ -133,7 +145,10 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error('❌ Verification failed:', error)
-  process.exitCode = 1
-})
+// Exit explicitly: the app's daily cleanup interval would keep the process alive.
+main()
+  .catch((error) => {
+    console.error('❌ Verification failed:', error)
+    process.exitCode = 1
+  })
+  .finally(() => process.exit())
