@@ -3,7 +3,7 @@ import { requireMcpToken } from '@/hono-app/middleware/auth'
 import { getLogConfig } from '@/services/config'
 import { getDashboard, getIssue } from '@/services/dashboard'
 import { getLogHistory } from '@/services/history-file'
-import { getIngestedHistory, listApps } from '@/services/ingest-store'
+import { getHistory, listApps } from '@/services/event-query'
 import { searchLogs } from '@/services/log-search'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
@@ -36,7 +36,7 @@ function createMcpServer() {
         'List available log sources. Use the returned "path" as the "source" argument of read_logs / search_logs. Sources starting with "ingested:" are apps shipping logs to logtrail.',
     },
     async () => {
-      const ingested = listApps().map((app) => ({
+      const ingested = (await listApps()).map((app) => ({
         name: app,
         path: `ingested:${app}`,
         type: 'ingested',
@@ -112,7 +112,7 @@ function createMcpServer() {
     },
     async ({ source, limit = 100, before }) => {
       if (source.startsWith('ingested:')) {
-        return text(getIngestedHistory(source.slice('ingested:'.length), before, limit))
+        return text(await getHistory(source.slice('ingested:'.length), before, limit))
       }
       const entry = getLogConfig().find((l: { path: string }) => l.path === source)
       if (!entry) return fail(`Unknown log source: ${source}`)
@@ -168,7 +168,7 @@ function createMcpServer() {
           'search_logs only supports ingested sources; use read_logs for configured files',
         )
       }
-      const result = searchLogs({
+      const result = await searchLogs({
         app: source?.slice('ingested:'.length),
         query,
         reqId,
@@ -176,7 +176,7 @@ function createMcpServer() {
         until,
         ...opts,
       })
-      return result.error ? fail(result.error) : text(result)
+      return 'error' in result ? fail(result.error) : text(result)
     },
   )
 

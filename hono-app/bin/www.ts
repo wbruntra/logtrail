@@ -1,9 +1,11 @@
 #!/usr/bin/env bun
 
 import { migrateToLatest } from '@database/migrate'
+import { startRetention } from '@/services/retention'
 import app from '../app'
 
 await migrateToLatest()
+startRetention()
 
 const port = parseInt(process.env.PORT || '12070', 10)
 

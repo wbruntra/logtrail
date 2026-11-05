@@ -1,7 +1,6 @@
 import { db } from '@database/db'
 import router from '@/hono-app/routes/ingest'
 import secrets from '@/secrets'
-import { getAllLines } from '@/services/ingest-store'
 import { beforeEach, describe, expect, it } from 'bun:test'
 
 function post(body: unknown, token = secrets.agentSecret) {
@@ -66,10 +65,6 @@ describe('POST /api/ingest', () => {
     })
     expect(error.fingerprint).toHaveLength(16)
     expect(info.fingerprint).toBeNull()
-
-    // Dual-written to the legacy file store for the viewer
-    const lines = getAllLines('shop_api').map((l) => JSON.parse(l))
-    expect(lines[0]).toMatchObject({ ts, level: 'error', tenant: 'acme', userId: '42' })
   })
 
   it('stores the valid events of a batch and reports the rest', async () => {

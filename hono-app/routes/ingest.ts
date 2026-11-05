@@ -1,7 +1,6 @@
 import secrets from '@/secrets'
 import { parseIngestPayload } from '@/services/event-schema'
-import { insertEvents, insertLines, toEvent } from '@/services/event-store'
-import { writeBatch, writeEvents } from '@/services/ingest-store'
+import { insertEvents, insertLines } from '@/services/event-store'
 import { Hono } from 'hono'
 
 const router = new Hono()
@@ -32,10 +31,8 @@ router.post('/', async (c) => {
     return c.json({ error: payload.error }, 400)
   }
 
-  // The file writes keep the viewer working until it reads from the database.
   if (payload.kind === 'lines') {
     await insertLines(payload.app, payload.lines)
-    writeBatch(payload.app, payload.lines)
     return c.json({ ok: true, written: payload.lines.length })
   }
 
@@ -44,7 +41,6 @@ router.post('/', async (c) => {
     return c.json({ error: 'No valid events', rejected }, 400)
   }
   const rows = await insertEvents(app, events)
-  writeEvents(app, rows.map(toEvent))
   return c.json({ ok: true, written: rows.length, ...(rejected.length ? { rejected } : {}) })
 })
 

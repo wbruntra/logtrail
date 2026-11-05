@@ -1,11 +1,9 @@
 #!/usr/bin/env bun
 
-import fs from 'node:fs'
-import path from 'node:path'
+import { db } from '@database/db'
 import { migrateToLatest } from '@database/migrate'
 import app from '@/hono-app/app'
 import secrets from '@/secrets'
-import { getTodayFile } from '@/services/ingest-store'
 
 const decoder = new TextDecoder()
 
@@ -124,7 +122,6 @@ async function main() {
   const appName = `verify_stream_${Date.now()}`
   const liveLine = `live verification line ${Date.now()}`
   const baseUrl = `http://127.0.0.1:${server.port}`
-  const appDir = path.dirname(getTodayFile(appName))
 
   try {
     await ingest(baseUrl, appName, ['setup line'])
@@ -141,7 +138,7 @@ async function main() {
     console.log(JSON.stringify({ appName, streamed }, null, 2))
   } finally {
     server.stop(true)
-    fs.rmSync(appDir, { recursive: true, force: true })
+    await db.deleteFrom('events').where('app', '=', appName).execute()
   }
 }
 
