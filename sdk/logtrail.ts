@@ -24,12 +24,18 @@
  * Crashes (logs, flushes, then exits with code 1 as Node would):
  *   logtrail.captureProcessErrors()
  *
+ * Console output — console.log/info/warn/error/debug still print as before, and
+ * each call is also sent as an event (source: 'console'), with the request's
+ * reqId when inside one:
+ *   logtrail.captureConsole()
+ *
  * Events are batched and sent in the background. Sending never throws and
  * never blocks the request; if logtrail is unreachable, events are retried
  * until the queue fills, then the oldest are dropped.
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { format } from 'node:util'
 
 export type Level = 'error' | 'warn' | 'info' | 'debug' | 'success'
 
@@ -124,6 +130,29 @@ const MAX_STACK = 16000
 const SEND_TIMEOUT_MS = 5000
 const EXIT_FLUSH_MS = 2000
 
+const CONSOLE_LEVELS = {
+  error: 'error',
+  warn: 'warn',
+  info: 'info',
+  log: 'info',
+  debug: 'debug',
+} as const satisfies Record<string, Level>
+type ConsoleMethod = keyof typeof CONSOLE_LEVELS
+type ConsoleFn = (...args: unknown[]) => void
+// The real console methods while captured, shared by every copy of this file so
+// only one client captures, and so the client's own output is not sent
+const CAPTURED = Symbol.for('logtrail.console')
+type CapturableConsole = Record<ConsoleMethod, ConsoleFn> & {
+  [CAPTURED]?: Partial<Record<ConsoleMethod, ConsoleFn>>
+}
+const ISO_TS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/
+
+/** console[method] as it was before captureConsole, so internal output is not captured. */
+function rawConsole(method: ConsoleMethod): ConsoleFn {
+  const target = console as unknown as CapturableConsole
+  return (target[CAPTURED]?.[method] ?? target[method]).bind(console)
+}
+
 const clip = (s: string, max: number) => (s.length > max ? s.slice(0, max) : s)
 
 function toError(value: unknown): Error {
@@ -195,7 +224,7 @@ export function createLogtrail(options: LogtrailOptions) {
   function warnOnce(key: string, message: string): void {
     if (warned.has(key)) return
     warned.add(key)
-    console.warn(`[logtrail] ${message}`)
+    rawConsole('warn')(`[logtrail] ${message}`)
   }
 
   function userOf(ctx: unknown): string | number | undefined {
@@ -381,7 +410,7 @@ export function createLogtrail(options: LogtrailOptions) {
     const handler = (label: string) => (reason: unknown) => {
       enqueue(errorEvent(reason, label))
       if (!exit) return void flush()
-      console.error(reason)
+      rawConsole('error')(reason)
       const timeout = new Promise((resolve) => setTimeout(resolve, EXIT_FLUSH_MS))
       void Promise.race([flush(), timeout]).then(() => proc.exit(1))
     }
@@ -389,7 +418,71 @@ export function createLogtrail(options: LogtrailOptions) {
     proc.on('unhandledRejection', handler('Unhandled rejection'))
   }
 
-  return { hono, express, expressErrors, log, error, flush, captureProcessErrors }
+  /**
+   * Also send console output as events: error and warn keep their level, debug
+   * is debug, log and info are info. Errors among the arguments contribute their
+   * message, and the first one's stack goes in `stack`. A leading ISO timestamp
+   * argument is dropped, since events carry their own. Only one client per
+   * process captures; returns a function that restores the console.
+   */
+  function captureConsole(): () => void {
+    const target = console as unknown as CapturableConsole
+    if (!enabled) return () => {}
+    if (target[CAPTURED]) {
+      warnOnce('console', 'console is already captured by another client')
+      return () => {}
+    }
+    const originals: Partial<Record<ConsoleMethod, ConsoleFn>> = {}
+    target[CAPTURED] = originals
+    let inside = false // console use while building an event, e.g. a getter that logs
+
+    for (const method of Object.keys(CONSOLE_LEVELS) as ConsoleMethod[]) {
+      const original = target[method]
+      originals[method] = original
+      target[method] = (...args: unknown[]) => {
+        original.apply(console, args)
+        if (inside) return
+        inside = true
+        try {
+          const parts =
+            args.length > 1 && typeof args[0] === 'string' && ISO_TS.test(args[0])
+              ? args.slice(1)
+              : args
+          const err = parts.find((a): a is Error => a instanceof Error)
+          const text = parts.map((a) => (a instanceof Error ? `${a.name}: ${a.message}` : a))
+          enqueue({
+            level: CONSOLE_LEVELS[method],
+            msg: clip(format(...text), MAX_MSG),
+            source: 'console',
+            stack: err?.stack ? clip(err.stack, MAX_STACK) : undefined,
+          })
+        } catch {
+          // never let logging break the caller
+        } finally {
+          inside = false
+        }
+      }
+    }
+
+    return () => {
+      if (target[CAPTURED] !== originals) return
+      for (const method of Object.keys(originals) as ConsoleMethod[]) {
+        target[method] = originals[method]!
+      }
+      delete target[CAPTURED]
+    }
+  }
+
+  return {
+    hono,
+    express,
+    expressErrors,
+    log,
+    error,
+    flush,
+    captureProcessErrors,
+    captureConsole,
+  }
 }
 
 export type Logtrail = ReturnType<typeof createLogtrail>

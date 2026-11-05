@@ -232,3 +232,79 @@ describe('delivery', () => {
     expect(sent).toHaveLength(0)
   })
 })
+
+describe('captureConsole()', () => {
+  const methods = ['log', 'info', 'warn', 'error', 'debug'] as const
+  const real = Object.fromEntries(methods.map((m) => [m, console[m]]))
+  let printed: unknown[][]
+
+  // Stand-ins for the real console, so captured calls still "print" but stay out of test output
+  beforeEach(() => {
+    printed = []
+    for (const m of methods) console[m] = (...args: unknown[]) => void printed.push(args)
+  })
+  afterAll(() => Object.assign(console, real))
+
+  it('still prints, and sends each call with its level', async () => {
+    const { logtrail, events } = client()
+    const restore = logtrail.captureConsole()
+    console.log('processed %d tasks', 3)
+    console.warn('slow', { ms: 900 })
+    console.debug('detail')
+    restore()
+    console.log('after restore')
+    await logtrail.flush()
+
+    expect(printed).toHaveLength(4)
+    expect(events().map((e) => [e.level, e.msg, e.source])).toEqual([
+      ['info', 'processed 3 tasks', 'console'],
+      ['warn', 'slow { ms: 900 }', 'console'],
+      ['debug', 'detail', 'console'],
+    ])
+  })
+
+  it('drops a leading timestamp argument and keeps an error stack', async () => {
+    const { logtrail, events } = client()
+    const restore = logtrail.captureConsole()
+    console.info('2026-11-05T08:20:32.969Z', 'run done')
+    console.error('Task failed:', new TypeError('bad token'))
+    restore()
+    await logtrail.flush()
+
+    const [info, error] = events()
+    expect(info.msg).toBe('run done')
+    expect(error).toMatchObject({ level: 'error', msg: 'Task failed: TypeError: bad token' })
+    expect(error.stack).toContain('TypeError: bad token')
+  })
+
+  it('attaches the request id inside a request', async () => {
+    const { logtrail, events } = client()
+    const restore = logtrail.captureConsole()
+    const app = new Hono()
+    app.use('*', logtrail.hono())
+    app.get('/team', (c) => {
+      console.log('TEAM ID', 35)
+      return c.text('ok')
+    })
+    const res = await app.request('/team')
+    restore()
+    await logtrail.flush()
+
+    expect(events()).toMatchObject([{ msg: 'TEAM ID 35', reqId: res.headers.get('x-request-id')! }])
+  })
+
+  it('lets only one client capture, and does not send its own warnings', async () => {
+    const first = client()
+    const second = client({ app: 'other' })
+    const restore = first.logtrail.captureConsole()
+    second.logtrail.captureConsole()
+    console.log('once')
+    restore()
+    await first.logtrail.flush()
+    await second.logtrail.flush()
+
+    expect(first.events().map((e) => e.msg)).toEqual(['once'])
+    expect(second.events()).toHaveLength(0)
+    expect(printed.flat().join(' ')).toContain('[logtrail] console is already captured')
+  })
+})
