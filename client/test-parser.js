@@ -11,7 +11,7 @@ const testCases = [
   'total socials 148',
   'WARN: Deprecated API endpoint accessed',
   'DEBUG: Processing request for /api/data',
-  'sending cached sheet public_talent_sheet:20494 page_1_limit_18'
+  'sending cached sheet public_talent_sheet:20494 page_1_limit_18',
 ]
 
 console.log('Testing log parser...\n')

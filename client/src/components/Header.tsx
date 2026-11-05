@@ -59,8 +59,12 @@ const Header: React.FC<HeaderProps> = ({
           <h1 className="display-5 mb-0">Logtrail</h1>
           <div className="d-flex align-items-center gap-3">
             <nav className="d-flex gap-2">
-              <NavLink to="/logs" className={navLinkClass}>Logs</NavLink>
-              <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>
+              <NavLink to="/logs" className={navLinkClass}>
+                Logs
+              </NavLink>
+              <NavLink to="/dashboard" className={navLinkClass}>
+                Dashboard
+              </NavLink>
             </nav>
             {controls}
             <button className="btn btn-outline-light" onClick={handleLogout} type="button">

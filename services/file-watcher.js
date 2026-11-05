@@ -37,12 +37,15 @@ class FileWatcher extends EventEmitter {
     })
     this.ts.on('data', (data) => {
       if (this.closed) return // Don't emit after close
-      const lines = data.toString().split('\n').filter(line => line.trim() !== '')
-      lines.forEach(line => {
+      const lines = data
+        .toString()
+        .split('\n')
+        .filter((line) => line.trim() !== '')
+      lines.forEach((line) => {
         this.currentLineNumber++
         this.emit('data', {
           lineNumber: this.currentLineNumber,
-          content: line
+          content: line,
         })
       })
     })

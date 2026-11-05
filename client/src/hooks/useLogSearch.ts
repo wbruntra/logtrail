@@ -34,21 +34,21 @@ export const useLogSearch = (logs: LogLine[]): UseLogSearchReturn => {
     try {
       // Check if query might be a regex (contains special regex characters)
       const isRegexLike = /[.*+?^${}()|[\]\\]/.test(debouncedQuery)
-      
+
       if (isRegexLike) {
         // Try to use as regex
         try {
           const regex = new RegExp(debouncedQuery, 'i')
-          return logs.filter(log => regex.test(log.content))
+          return logs.filter((log) => regex.test(log.content))
         } catch {
           // If regex is invalid, fall back to string search
           const lowerQuery = debouncedQuery.toLowerCase()
-          return logs.filter(log => log.content.toLowerCase().includes(lowerQuery))
+          return logs.filter((log) => log.content.toLowerCase().includes(lowerQuery))
         }
       } else {
         // Simple case-insensitive string search
         const lowerQuery = debouncedQuery.toLowerCase()
-        return logs.filter(log => log.content.toLowerCase().includes(lowerQuery))
+        return logs.filter((log) => log.content.toLowerCase().includes(lowerQuery))
       }
     } catch {
       // Fallback for any unexpected errors
@@ -70,6 +70,6 @@ export const useLogSearch = (logs: LogLine[]): UseLogSearchReturn => {
     isSearching,
     matchCount,
     clearSearch,
-    debouncedQuery
+    debouncedQuery,
   }
 }

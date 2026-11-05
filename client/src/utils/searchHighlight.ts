@@ -6,10 +6,7 @@ export interface HighlightedSegment {
 /**
  * Highlight search matches in text
  */
-export function highlightSearchMatches(
-  text: string, 
-  searchQuery: string
-): HighlightedSegment[] {
+export function highlightSearchMatches(text: string, searchQuery: string): HighlightedSegment[] {
   if (!searchQuery.trim()) {
     return [{ text, isMatch: false }]
   }
@@ -41,7 +38,7 @@ export function highlightSearchMatches(
         const isMatch = i % 2 === 1 // Odd indices are matches due to split with capturing group
         segments.push({
           text: parts[i],
-          isMatch
+          isMatch,
         })
       }
     }

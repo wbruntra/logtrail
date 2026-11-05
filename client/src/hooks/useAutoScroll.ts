@@ -14,9 +14,7 @@ interface UseAutoScrollReturn {
   }>
 }
 
-export const useAutoScroll = (
-  logs: LogLine[]
-): UseAutoScrollReturn => {
+export const useAutoScroll = (logs: LogLine[]): UseAutoScrollReturn => {
   const [autoScroll, setAutoScroll] = useState(true)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const scrollRestoreRef = useRef<{
@@ -63,6 +61,6 @@ export const useAutoScroll = (
     scrollToBottom,
     handleScroll,
     containerRef,
-    scrollRestoreRef
+    scrollRestoreRef,
   }
 }

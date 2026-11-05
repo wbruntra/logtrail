@@ -13,6 +13,7 @@ The current `App.tsx` file has grown to over 180 lines and contains multiple res
 ## Proposed Component Structure
 
 ### 1. Header Component (`components/Header.tsx`)
+
 **Responsibility**: Top navigation bar with log file selection
 
 ```tsx
@@ -24,11 +25,13 @@ interface HeaderProps {
 ```
 
 **Contains**:
+
 - Application title
 - Log file dropdown selector
 - Future: User menu, settings button
 
 ### 2. LogViewer Component (`components/LogViewer.tsx`)
+
 **Responsibility**: Display logs with scrolling and auto-scroll functionality
 
 ```tsx
@@ -42,6 +45,7 @@ interface LogViewerProps {
 ```
 
 **Contains**:
+
 - Log display container
 - Auto-scroll toggle button
 - Scroll event handling
@@ -50,6 +54,7 @@ interface LogViewerProps {
 ### 3. Custom Hooks for Business Logic
 
 #### `hooks/useLogStream.ts`
+
 **Responsibility**: Manage log streaming and EventSource connection
 
 ```tsx
@@ -62,6 +67,7 @@ interface UseLogStreamReturn {
 ```
 
 #### `hooks/useLogHistory.ts`
+
 **Responsibility**: Handle infinite scroll and history loading
 
 ```tsx
@@ -75,6 +81,7 @@ interface UseLogHistoryReturn {
 ```
 
 #### `hooks/useLogFiles.ts`
+
 **Responsibility**: Fetch and manage available log files
 
 ```tsx
@@ -88,6 +95,7 @@ interface UseLogFilesReturn {
 ```
 
 #### `hooks/useAutoScroll.ts`
+
 **Responsibility**: Manage auto-scroll behavior and scroll position
 
 ```tsx
@@ -103,35 +111,42 @@ interface UseAutoScrollReturn {
 ### 4. Utility Components
 
 #### `components/LoadingIndicator.tsx`
+
 **Responsibility**: Reusable loading spinner/text
 
 #### `components/AutoScrollButton.tsx`
+
 **Responsibility**: Floating auto-scroll toggle button
 
 #### `components/LogLine.tsx`
+
 **Responsibility**: Individual log line rendering (future: syntax highlighting)
 
 ## Refactoring Steps
 
 ### Phase 1: Extract Header Component
+
 1. Create `Header.tsx` component
 2. Move log file selection logic
 3. Update `App.tsx` to use new Header component
 4. Test functionality
 
 ### Phase 2: Extract LogViewer Component
+
 1. Create `LogViewer.tsx` component
 2. Move log display and scroll handling
 3. Extract auto-scroll button into separate component
 4. Update `App.tsx` to use new LogViewer component
 
 ### Phase 3: Create Custom Hooks
+
 1. Extract log files management into `useLogFiles` hook
 2. Extract log streaming logic into `useLogStream` hook
 3. Extract history loading into `useLogHistory` hook
 4. Extract auto-scroll logic into `useAutoScroll` hook
 
 ### Phase 4: Utility Components
+
 1. Create reusable `LoadingIndicator` component
 2. Extract `AutoScrollButton` component
 3. Prepare `LogLine` component for future enhancements

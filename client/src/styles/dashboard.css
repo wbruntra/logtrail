@@ -27,10 +27,18 @@
   color: #6c757d;
 }
 
-.stat-errors  { border-left: 3px solid #dc3545; }
-.stat-warns   { border-left: 3px solid #ffc107; }
-.stat-apps    { border-left: 3px solid #17a2b8; }
-.stat-topcode { border-left: 3px solid #6f42c1; }
+.stat-errors {
+  border-left: 3px solid #dc3545;
+}
+.stat-warns {
+  border-left: 3px solid #ffc107;
+}
+.stat-apps {
+  border-left: 3px solid #17a2b8;
+}
+.stat-topcode {
+  border-left: 3px solid #6f42c1;
+}
 
 /* ── Bar chart ──────────────────────────────────────────────────────── */
 
@@ -98,7 +106,7 @@
   left: 50%;
   transform: translateX(-50%);
   background: #343a40;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 0.7rem;
@@ -164,7 +172,9 @@
   border: 1px solid transparent;
   cursor: pointer;
   opacity: 0.35;
-  transition: opacity 0.15s, background 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
   background: transparent;
 }
 
@@ -304,7 +314,9 @@
   font-size: 0.82rem;
 }
 
-.code-bar-row:last-child { border-bottom: none; }
+.code-bar-row:last-child {
+  border-bottom: none;
+}
 
 .code-bar-row .code-name {
   font-family: 'Courier New', monospace;

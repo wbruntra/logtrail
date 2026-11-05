@@ -3,11 +3,20 @@
 const fs = require('fs')
 const path = require('path')
 
-const baseUrl = (process.env.LOGTRAIL_URL || 'https://logtrail2.lunaparkdigital.com').replace(/\/$/, '')
-const outputDir = path.resolve(process.env.LOGTRAIL_OUTPUT_DIR || path.join(process.cwd(), 'data', 'raw-logs'))
-const pageSize = Math.min(Math.max(parseInt(process.env.LOGTRAIL_PAGE_SIZE || '500', 10) || 500, 1), 1000)
+const baseUrl = (process.env.LOGTRAIL_URL || 'https://logtrail2.lunaparkdigital.com').replace(
+  /\/$/,
+  '',
+)
+const outputDir = path.resolve(
+  process.env.LOGTRAIL_OUTPUT_DIR || path.join(process.cwd(), 'data', 'raw-logs'),
+)
+const pageSize = Math.min(
+  Math.max(parseInt(process.env.LOGTRAIL_PAGE_SIZE || '500', 10) || 500, 1),
+  1000,
+)
 const includeAll = process.env.LOGTRAIL_INCLUDE_ALL === 'true'
-const errorQuery = 'ERROR|FATAL|CRITICAL|"level":"error"| (GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS) [^ ]+ 5[0-9][0-9] '
+const errorQuery =
+  'ERROR|FATAL|CRITICAL|"level":"error"| (GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS) [^ ]+ 5[0-9][0-9] '
 
 function getPassword() {
   if (process.env.LOGTRAIL_PASSWORD) return process.env.LOGTRAIL_PASSWORD
@@ -26,7 +35,9 @@ function safeName(value) {
 // explicit ERROR/FATAL/CRITICAL markers, or HTTP 5xx request lines.
 function isErrorLine(content) {
   if (/\b(ERROR|FATAL|CRITICAL)\b/i.test(content)) return true
-  return /\b(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+[^\s]+\s+5\d{2}\s+(?:\d+\.\d+\s+ms|-)/.test(content)
+  return /\b(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+[^\s]+\s+5\d{2}\s+(?:\d+\.\d+\s+ms|-)/.test(
+    content,
+  )
 }
 
 function isStructuredError(content) {
@@ -116,11 +127,15 @@ async function main() {
     const selectedLines = includeAll
       ? result.lines
       : result.lines.filter((line) => isStructuredError(line.content) || isErrorLine(line.content))
-    const content = selectedLines.map((line) => JSON.stringify({
-      source: log,
-      lineNumber: line.lineNumber,
-      content: line.content,
-    })).join('\n')
+    const content = selectedLines
+      .map((line) =>
+        JSON.stringify({
+          source: log,
+          lineNumber: line.lineNumber,
+          content: line.content,
+        }),
+      )
+      .join('\n')
     fs.writeFileSync(destination, content ? `${content}\n` : '')
     manifest.logs.push({
       ...log,
@@ -128,11 +143,15 @@ async function main() {
       totalLines: result.totalLines,
       selectedLines: selectedLines.length,
     })
-    console.log(`${log.path}: ${selectedLines.length}/${result.totalLines} error lines -> ${fileName}`)
+    console.log(
+      `${log.path}: ${selectedLines.length}/${result.totalLines} error lines -> ${fileName}`,
+    )
   }
 
   fs.writeFileSync(path.join(outputDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-  console.log(`${includeAll ? 'Downloaded all lines' : 'Downloaded error lines'} from ${manifest.logs.length} logs to ${outputDir}`)
+  console.log(
+    `${includeAll ? 'Downloaded all lines' : 'Downloaded error lines'} from ${manifest.logs.length} logs to ${outputDir}`,
+  )
 }
 
 main().catch((error) => {

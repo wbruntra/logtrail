@@ -36,12 +36,14 @@ The solution involves deploying lightweight "agent" instances of logtrail on rem
 ### 1. Connection Model: WebSocket-Based Communication
 
 **Traditional HTTP Model (Complex):**
+
 ```
 Central Server → HTTP Request → Agent Server:3001
                 ↑ Requires firewall rules, port forwarding
 ```
 
 **Proposed WebSocket Model (Simple):**
+
 ```
 Agent → WebSocket Connection → Central Server
        ↑ Standard outbound web traffic, no firewall changes needed
@@ -60,6 +62,7 @@ Agent → WebSocket Connection → Central Server
 The same Express.js application runs in two modes:
 
 #### Central Server Mode
+
 - Full web application with React frontend
 - Session-based user authentication
 - Handles both local and remote log files
@@ -67,6 +70,7 @@ The same Express.js application runs in two modes:
 - SSE streaming to user browsers
 
 #### Agent Mode
+
 - Lightweight API server
 - API key authentication
 - WebSocket client to central server
@@ -76,16 +80,19 @@ The same Express.js application runs in two modes:
 ### 3. Authentication Strategy
 
 #### User Authentication (Central Server)
+
 - **Method**: Session cookies (existing implementation)
 - **Scope**: User browser ↔ Central server
 - **Purpose**: Protect user access to web interface
 
 #### Internal Authentication (Agent Communication)
+
 - **Method**: API keys via WebSocket headers
 - **Scope**: Agent ↔ Central server
 - **Purpose**: Secure internal service communication
 
 #### Authentication Flow
+
 ```
 1. User authenticates with central server (session cookie)
 2. User requests remote log → Central server validates session
@@ -100,9 +107,11 @@ The same Express.js application runs in two modes:
 ### Phase 1: Core Infrastructure
 
 #### 1.1 Mode Detection System
+
 Create configuration system to determine application mode:
 
 **File: `config/mode.js`**
+
 ```javascript
 const getMode = () => process.env.LOGTRAIL_MODE || 'central'
 const isCentralServer = () => getMode() === 'central'
@@ -110,23 +119,28 @@ const isAgent = () => getMode() === 'agent'
 ```
 
 #### 1.2 Conditional Middleware Setup
+
 Modify `app.js` to apply different middleware based on mode:
 
 **Central Server Middleware:**
+
 - Cookie session management
 - Static file serving (React frontend)
 - User authentication routes
 - WebSocket server setup
 
 **Agent Middleware:**
+
 - API key authentication
 - WebSocket client setup
 - Agent-specific routes only
 
 #### 1.3 Authentication Middleware
+
 Create mode-appropriate authentication:
 
 **File: `middleware/auth.js`**
+
 - `requireLogin()` - Session-based auth for central server
 - `requireAgentAuth()` - API key auth for agents
 - `getAuthMiddleware()` - Returns appropriate middleware based on mode
@@ -134,27 +148,33 @@ Create mode-appropriate authentication:
 ### Phase 2: Communication Layer
 
 #### 2.1 WebSocket Server (Central Server)
+
 Implement WebSocket server to accept agent connections:
 
 **Features:**
+
 - Agent registration and discovery
 - Request/response correlation
 - Connection health monitoring
 - Graceful reconnection handling
 
 #### 2.2 WebSocket Client (Agent)
+
 Implement WebSocket client for agents:
 
 **Features:**
+
 - Auto-connection to central server
 - Heartbeat/keepalive mechanism
 - Request processing and response routing
 - Automatic reconnection on disconnect
 
 #### 2.3 Request Forwarding System
+
 Create abstraction layer in central server:
 
 **Functionality:**
+
 - Route requests to appropriate handler (local vs remote)
 - Transform WebSocket communication into Promise-based API
 - Handle timeouts and error cases
@@ -163,75 +183,81 @@ Create abstraction layer in central server:
 ### Phase 3: Configuration Management
 
 #### 3.1 Enhanced Log Configuration
+
 Extend `logtrail.config.yaml` to support remote logs:
 
 ```yaml
 logs:
   # Local logs (existing)
-  - name: "Local System Log"
-    path: "/var/log/syslog"
-    type: "local"
-    description: "Local system logs"
-    
+  - name: 'Local System Log'
+    path: '/var/log/syslog'
+    type: 'local'
+    description: 'Local system logs'
+
   # Remote logs (new)
-  - name: "Web Server Logs"
-    path: "/var/log/nginx/access.log"
-    type: "remote"
-    agent: "web-server-01"
-    description: "Production web server access logs"
-    
-  - name: "Database Logs"
-    path: "/var/log/postgresql/postgresql.log"
-    type: "remote"
-    agent: "db-server-01"
-    description: "Database server logs"
+  - name: 'Web Server Logs'
+    path: '/var/log/nginx/access.log'
+    type: 'remote'
+    agent: 'web-server-01'
+    description: 'Production web server access logs'
+
+  - name: 'Database Logs'
+    path: '/var/log/postgresql/postgresql.log'
+    type: 'remote'
+    agent: 'db-server-01'
+    description: 'Database server logs'
 
 # Agent registry (central server only)
 agents:
-  - id: "web-server-01"
-    name: "Production Web Server"
-    description: "Main web application server"
-    
-  - id: "db-server-01"
-    name: "Database Server"
-    description: "PostgreSQL database server"
+  - id: 'web-server-01'
+    name: 'Production Web Server'
+    description: 'Main web application server'
+
+  - id: 'db-server-01'
+    name: 'Database Server'
+    description: 'PostgreSQL database server'
 ```
 
 #### 3.2 Agent Configuration
+
 Each agent has its own configuration file:
 
 ```yaml
 # agent.config.yaml
 agent:
-  id: "web-server-01"
-  name: "Production Web Server"
-  central_server: "wss://logtrail-central.company.com"
-  api_key: "${AGENT_API_KEY}"
-  
+  id: 'web-server-01'
+  name: 'Production Web Server'
+  central_server: 'wss://logtrail-central.company.com'
+  api_key: '${AGENT_API_KEY}'
+
 logs:
-  - name: "Nginx Access Log"
-    path: "/var/log/nginx/access.log"
-    description: "Web server access logs"
-  - name: "Application Log"
-    path: "/app/logs/application.log"
-    description: "Main application logs"
+  - name: 'Nginx Access Log'
+    path: '/var/log/nginx/access.log'
+    description: 'Web server access logs'
+  - name: 'Application Log'
+    path: '/app/logs/application.log'
+    description: 'Main application logs'
 ```
 
 ### Phase 4: Route Implementation
 
 #### 4.1 Enhanced Central Server Routes
+
 Update existing `routes/logs.js` to handle both local and remote logs:
 
 **Key Changes:**
+
 - Detect log type from configuration
 - Route local logs to existing handlers
 - Route remote logs to agent communication layer
 - Maintain identical API interface
 
 #### 4.2 Agent Routes
+
 Create `routes/agent.js` for agent-specific endpoints:
 
 **Endpoints:**
+
 - `GET /api/agent/tail` - Get last N lines of log file
 - `GET /api/agent/history` - Get paginated log history
 - `GET /api/agent/list` - List available log files
@@ -239,9 +265,11 @@ Create `routes/agent.js` for agent-specific endpoints:
 - `GET /api/agent/context/:lineNumber` - Get context around line
 
 #### 4.3 WebSocket Route Handlers
+
 Implement WebSocket message routing:
 
 **Message Types:**
+
 - `agent_hello` - Agent registration
 - `get_tail` - Request log tail
 - `get_history` - Request log history
@@ -252,6 +280,7 @@ Implement WebSocket message routing:
 ### Phase 5: Frontend Integration
 
 #### 5.1 Transparent Remote Log Support
+
 No frontend changes required - existing components work seamlessly:
 
 - Log file selector shows both local and remote logs
@@ -260,6 +289,7 @@ No frontend changes required - existing components work seamlessly:
 - Agent connection status can be displayed optionally
 
 #### 5.2 Enhanced UI Features (Optional)
+
 Consider adding agent-specific features:
 
 - Agent connection status indicators
@@ -272,6 +302,7 @@ Consider adding agent-specific features:
 ### Development Setup
 
 #### 1. Central Server
+
 ```bash
 # Set environment variables
 export LOGTRAIL_MODE=central
@@ -282,6 +313,7 @@ npm run dev:central
 ```
 
 #### 2. Agent Setup
+
 ```bash
 # Set environment variables
 export LOGTRAIL_MODE=agent
@@ -295,6 +327,7 @@ npm run dev:agent
 ### Production Deployment
 
 #### 1. Central Server Deployment
+
 ```bash
 # Environment configuration
 LOGTRAIL_MODE=central
@@ -306,6 +339,7 @@ npm start
 ```
 
 #### 2. Agent Deployment (per remote system)
+
 ```bash
 # Environment configuration
 LOGTRAIL_MODE=agent
@@ -320,6 +354,7 @@ npm start
 ### Docker Deployment
 
 #### Central Server Dockerfile
+
 ```dockerfile
 FROM node:18
 WORKDIR /app
@@ -332,6 +367,7 @@ CMD ["npm", "start"]
 ```
 
 #### Agent Dockerfile
+
 ```dockerfile
 FROM node:18
 WORKDIR /app
@@ -345,17 +381,20 @@ CMD ["npm", "start"]
 ## Security Considerations
 
 ### Network Security
+
 - All WebSocket connections use WSS (WebSocket over TLS)
 - Agents only make outbound connections (firewall-friendly)
 - No inbound ports required on agent systems
 
 ### Authentication Security
+
 - Central server uses existing session-based authentication
 - Agent communication secured with API keys
 - API keys stored in environment variables, not config files
 - Separate API key per agent for granular access control
 
 ### Access Control
+
 - Users authenticate only with central server
 - Central server validates all user requests before forwarding
 - Agents trust central server based on API key validation
@@ -364,18 +403,21 @@ CMD ["npm", "start"]
 ## Monitoring and Operations
 
 ### Health Checks
+
 - Central server monitors agent connection status
 - Heartbeat mechanism detects connection issues
 - Automatic reconnection for transient network issues
 - Alert on prolonged agent disconnection
 
 ### Logging and Debugging
+
 - WebSocket connection events logged
 - Request/response correlation IDs for debugging
 - Agent registration and deregistration events
 - Performance metrics for remote vs local operations
 
 ### Troubleshooting
+
 - Agent connection status visible in UI
 - WebSocket connection diagnostics
 - API key validation error messages
@@ -384,16 +426,19 @@ CMD ["npm", "start"]
 ## Performance Considerations
 
 ### Latency
+
 - WebSocket connections provide low-latency communication
 - Persistent connections eliminate connection overhead
 - Real-time streaming maintains current performance
 
 ### Scalability
+
 - Central server can handle multiple concurrent agents
 - Each agent operates independently
 - Horizontal scaling through multiple central servers possible
 
 ### Resource Usage
+
 - Agents have minimal resource requirements
 - WebSocket connections use less memory than HTTP polling
 - File watching operations remain local to each system
@@ -401,12 +446,14 @@ CMD ["npm", "start"]
 ## Migration Strategy
 
 ### Incremental Adoption
+
 1. **Phase 1**: Deploy enhanced central server (backward compatible)
 2. **Phase 2**: Deploy first agent on one remote system
 3. **Phase 3**: Gradually migrate additional systems to agents
 4. **Phase 4**: Add advanced distributed features
 
 ### Rollback Plan
+
 - Central server remains fully functional without agents
 - Local log monitoring unaffected by agent deployment
 - Agents can be stopped without affecting central server
@@ -415,12 +462,14 @@ CMD ["npm", "start"]
 ## Future Enhancements
 
 ### Advanced Features
+
 - Service discovery for automatic agent registration
 - Load balancing across multiple central servers
 - Cross-agent log correlation and analysis
 - Distributed alerting and notification system
 
 ### Integration Opportunities
+
 - Integration with existing monitoring systems
 - Support for log forwarding protocols (syslog, fluentd)
 - Container orchestration integration (Kubernetes)

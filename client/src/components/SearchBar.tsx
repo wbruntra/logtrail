@@ -70,7 +70,9 @@ const SearchBar: React.FC<SearchBarProps> = ({
       {searchQuery && !isSearching && (
         <div className="search-info">
           <small className="text-muted">
-            {matchCount === 0 ? 'No matches found' : `${matchCount} match${matchCount === 1 ? '' : 'es'} in file`}
+            {matchCount === 0
+              ? 'No matches found'
+              : `${matchCount} match${matchCount === 1 ? '' : 'es'} in file`}
           </small>
         </div>
       )}

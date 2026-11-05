@@ -18,9 +18,8 @@ const tailStream = require('tail-stream')
 
 const args = process.argv.slice(2)
 const configFlagIdx = args.indexOf('--config')
-const configPath = configFlagIdx >= 0
-  ? args[configFlagIdx + 1]
-  : path.join(__dirname, 'agent.config.yaml')
+const configPath =
+  configFlagIdx >= 0 ? args[configFlagIdx + 1] : path.join(__dirname, 'agent.config.yaml')
 
 let config
 try {
@@ -50,8 +49,8 @@ const fileEntries = files.map((entry) => {
 
 // --- Send queue with batching and retry (one queue per app) ---
 
-const FLUSH_INTERVAL_MS = 500   // How often to flush buffered lines to central
-const MAX_BUFFER_SIZE = 1000    // Drop oldest lines if buffer grows beyond this
+const FLUSH_INTERVAL_MS = 500 // How often to flush buffered lines to central
+const MAX_BUFFER_SIZE = 1000 // Drop oldest lines if buffer grows beyond this
 
 // Map of appName -> { queue: string[], isSending: bool, lastErrorMsg: string|null }
 const appQueues = {}
@@ -70,7 +69,7 @@ async function sendBatch(appName, lines) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${agent_secret}`,
+        Authorization: `Bearer ${agent_secret}`,
       },
       body: JSON.stringify({ app: appName, lines }),
     })
@@ -131,15 +130,18 @@ for (const { filePath, appName } of fileEntries) {
   getQueue(appName)
 
   const ts = tailStream.createReadStream(absPath, {
-    beginAt: 'end',       // Only tail new lines, don't replay existing content
-    onMove: 'follow',     // Follow the file if it's moved/rotated
+    beginAt: 'end', // Only tail new lines, don't replay existing content
+    onMove: 'follow', // Follow the file if it's moved/rotated
     detectTruncate: true, // Handle log truncation (e.g. logrotate)
-    endOnError: false,    // Keep trying if the file doesn't exist yet
+    endOnError: false, // Keep trying if the file doesn't exist yet
     encoding: 'utf8',
   })
 
   ts.on('data', (data) => {
-    const lines = data.toString().split('\n').filter((l) => l.trim())
+    const lines = data
+      .toString()
+      .split('\n')
+      .filter((l) => l.trim())
     if (lines.length) getQueue(appName).queue.push(...lines)
   })
 
@@ -149,7 +151,9 @@ for (const { filePath, appName } of fileEntries) {
 }
 
 const uniqueApps = [...new Set(fileEntries.map((e) => e.appName))]
-console.log(`[agent] Running — central: ${central_url}, watching ${fileEntries.length} file(s) across app(s): ${uniqueApps.join(', ')}`)
+console.log(
+  `[agent] Running — central: ${central_url}, watching ${fileEntries.length} file(s) across app(s): ${uniqueApps.join(', ')}`,
+)
 
 process.on('SIGINT', () => {
   console.log('[agent] Shutting down...')

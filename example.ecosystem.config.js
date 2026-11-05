@@ -8,17 +8,17 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         LOGTRAIL_MODE: 'central',
-        PORT: 3000
+        PORT: 3000,
       },
       env_development: {
         NODE_ENV: 'development',
         LOGTRAIL_MODE: 'central',
-        PORT: 3000
+        PORT: 3000,
       },
       env_staging: {
         NODE_ENV: 'staging',
         LOGTRAIL_MODE: 'central',
-        PORT: 3000
+        PORT: 3000,
       },
       // Central server specific settings
       max_memory_restart: '1G',
@@ -31,7 +31,7 @@ module.exports = {
       ignore_watch: ['node_modules', 'logs', 'client/dist'],
       // Health monitoring
       min_uptime: '10s',
-      max_restarts: 10
+      max_restarts: 10,
     },
     {
       name: 'logtrail-agent',
@@ -41,17 +41,17 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         LOGTRAIL_MODE: 'agent',
-        PORT: 3001
+        PORT: 3001,
       },
       env_development: {
         NODE_ENV: 'development',
         LOGTRAIL_MODE: 'agent',
-        PORT: 3001
+        PORT: 3001,
       },
       env_staging: {
         NODE_ENV: 'staging',
         LOGTRAIL_MODE: 'agent',
-        PORT: 3001
+        PORT: 3001,
       },
       // Agent specific settings
       max_memory_restart: '512M',
@@ -64,7 +64,7 @@ module.exports = {
       ignore_watch: ['node_modules', 'logs'],
       // Health monitoring
       min_uptime: '10s',
-      max_restarts: 10
-    }
-  ]
+      max_restarts: 10,
+    },
+  ],
 }

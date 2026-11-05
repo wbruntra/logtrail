@@ -46,7 +46,7 @@ function App() {
   } = useBackendSearch()
 
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
-    new URLSearchParams(window.location.search).get('line') ? 'context' : 'live'
+    new URLSearchParams(window.location.search).get('line') ? 'context' : 'live',
   )
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
