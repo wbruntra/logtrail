@@ -8,3 +8,6 @@ logs:
   - name: Secondary Log
     path: test/log2.txt
     description: A secondary log file for demonstration
+
+# Days to keep ingested events (default 3). LOGTRAIL_RETENTION_DAYS overrides.
+retention_days: 3

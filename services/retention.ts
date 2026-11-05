@@ -1,14 +1,17 @@
 import { db } from '@database/db'
-
-/** How long events are kept, by receipt time. */
-export const RETENTION_DAYS = Number(process.env.LOGTRAIL_RETENTION_DAYS) || 3
+import { getRetentionDays } from './config'
 
 const BATCH = 5000
 const INTERVAL_MS = 60 * 60 * 1000
 
+/** Receipt time before which events are expired. */
+export function retentionCutoff(now = new Date()): string {
+  return new Date(now.getTime() - getRetentionDays() * 24 * 60 * 60 * 1000).toISOString()
+}
+
 /** Deletes expired events in batches, so ingest isn't blocked behind one long write. */
 export async function deleteExpired(now = new Date()): Promise<number> {
-  const cutoff = new Date(now.getTime() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const cutoff = retentionCutoff(now)
   let deleted = 0
   for (;;) {
     const result = await db
@@ -23,12 +26,13 @@ export async function deleteExpired(now = new Date()): Promise<number> {
   }
 }
 
-/** Runs retention now and then hourly. */
+/** Runs retention now and then hourly. The period is re-read from config each run. */
 export function startRetention(): void {
   const run = () =>
     deleteExpired()
       .then(
-        (n) => n && console.log(`[retention] deleted ${n} events older than ${RETENTION_DAYS}d`),
+        (n) =>
+          n && console.log(`[retention] deleted ${n} events older than ${getRetentionDays()}d`),
       )
       .catch((err) => console.error('[retention] failed:', err))
   void run()

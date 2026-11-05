@@ -4,9 +4,10 @@
 //
 //   bun scripts/import-ingested-logs.ts [dir]      (default: ./ingested-logs)
 //
-// Lines from before an app's earliest stored event are imported; later ones are skipped,
-// since ingest already stored them. That makes it safe to re-run. Imported events keep
-// their original timestamps, so retention expires them on the usual schedule.
+// Lines already stored (same app, timestamp and message) and lines older than the
+// retention period are skipped, so it is safe to re-run, including while the server is
+// ingesting. Imported events keep their original timestamps, so retention expires them
+// on the usual schedule.
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -15,6 +16,7 @@ import { migrateToLatest } from '@database/migrate'
 import type { NewEventRow } from '@database/schema'
 import { eventSchema } from '@/services/event-schema'
 import { toRow } from '@/services/event-store'
+import { retentionCutoff } from '@/services/retention'
 
 const BATCH = 500
 
@@ -35,12 +37,19 @@ export function parseLine(app: string, line: string): NewEventRow | null {
   return { app, ts, received_at: ts, level: null, msg: line.slice(space + 1) }
 }
 
-async function importApp(app: string, dir: string): Promise<void> {
-  const { first } = await db
+const key = (row: { ts: string; msg: string }) => `${row.ts}\0${row.msg}`
+
+export async function importApp(app: string, dir: string, cutoff: string): Promise<void> {
+  // A count per key, not a set: agent batches share one timestamp, so identical lines in
+  // a batch are distinct events, and each stored row accounts for exactly one of them.
+  const stored = new Map<string, number>()
+  for (const row of await db
     .selectFrom('events')
-    .select((eb) => eb.fn.min('ts').as('first'))
+    .select(['ts', 'msg'])
     .where('app', '=', app)
-    .executeTakeFirstOrThrow()
+    .execute()) {
+    stored.set(key(row), (stored.get(key(row)) ?? 0) + 1)
+  }
 
   const files = fs
     .readdirSync(dir)
@@ -49,13 +58,17 @@ async function importApp(app: string, dir: string): Promise<void> {
   const rows: NewEventRow[] = []
   let unreadable = 0
   let alreadyStored = 0
+  let expired = 0
   for (const file of files) {
     for (const line of fs.readFileSync(path.join(dir, file), 'utf8').split('\n')) {
       if (!line.trim()) continue
       const row = parseLine(app, line)
       if (!row) unreadable++
-      else if (first && row.ts >= first) alreadyStored++
-      else rows.push(row)
+      else if (row.ts < cutoff) expired++
+      else if (stored.get(key(row))) {
+        stored.set(key(row), stored.get(key(row))! - 1)
+        alreadyStored++
+      } else rows.push(row)
     }
   }
 
@@ -68,7 +81,7 @@ async function importApp(app: string, dir: string): Promise<void> {
     }
   })
   console.log(
-    `${app}: imported ${rows.length}, skipped ${alreadyStored} already stored, ${unreadable} unreadable`,
+    `${app}: imported ${rows.length}; skipped ${alreadyStored} already stored, ${expired} expired, ${unreadable} unreadable`,
   )
 }
 
@@ -79,7 +92,8 @@ if (import.meta.main) {
     process.exit(1)
   }
   await migrateToLatest()
+  const cutoff = retentionCutoff()
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) await importApp(entry.name, path.join(dir, entry.name))
+    if (entry.isDirectory()) await importApp(entry.name, path.join(dir, entry.name), cutoff)
   }
 }

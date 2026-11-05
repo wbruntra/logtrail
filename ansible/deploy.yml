@@ -84,7 +84,31 @@
       changed_when: false
       tags: [verify]
 
-    - name: 7. Verify the public site through nginx
+    - name: 7. Import legacy ingested-logs/ into the database
+      # One-time move off the old file store. Runs after the new server is up,
+      # so lines the old server wrote while restarting are included; the import
+      # skips lines already stored, so a re-run is harmless. The directory is
+      # then renamed, which keeps later deploys from importing it again.
+      shell: |
+        set -e
+        [ -d ingested-logs ] || exit 0
+        bun scripts/import-ingested-logs.ts ingested-logs
+        dest="ingested-logs.imported-$(date +%Y%m%d-%H%M%S)"
+        mv ingested-logs "$dest"
+        echo "moved to $dest"
+      args:
+        chdir: '{{ project_root }}'
+      register: import_result
+      changed_when: "'moved to' in import_result.stdout"
+      tags: [import]
+
+    - name: Show the import summary
+      debug:
+        var: import_result.stdout_lines
+      when: import_result is changed
+      tags: [import]
+
+    - name: 8. Verify the public site through nginx
       # Runs from the machine running Ansible, so it also catches DNS, TLS
       # and nginx problems.
       delegate_to: localhost

@@ -3,9 +3,11 @@
 import { migrateToLatest } from '@database/migrate'
 import { startRetention } from '@/services/retention'
 import app from '../app'
+import { logtrail } from '../self-log'
 
 await migrateToLatest()
 startRetention()
+logtrail.captureProcessErrors()
 
 const port = parseInt(process.env.PORT || '12070', 10)
 

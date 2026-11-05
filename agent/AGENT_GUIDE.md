@@ -2,14 +2,14 @@
 
 ## How It Works
 
-The agent is a lightweight script that runs on each of your servers. It watches log files you specify and ships new lines to your central logtrail instance over HTTP. Logtrail stamps each line with an ingestion timestamp and stores it in a daily file. After 3 days, old files are deleted automatically.
+The agent is a lightweight script that runs on each of your servers. It watches log files you specify and ships new lines to your central logtrail instance over HTTP. Logtrail stamps each line with an ingestion timestamp and stores it in its database. After 3 days (configurable), old lines are deleted automatically.
 
 ```
 Your server                       Central logtrail
 ──────────────────────────────    ──────────────────────────────
 logtrail-agent                →   POST /api/ingest
   tails /var/log/nginx/*.log       adds timestamp
-  tails /home/deploy/app.log       writes to ingested-logs/
+  tails /home/deploy/app.log       stores in data/logtrail.db
   buffers + batches every 500ms    streams to browser UI
 ```
 
@@ -30,9 +30,9 @@ export AGENT_SECRET="some-long-random-string"
 Copy `agent.config.yaml` to each remote server and fill in the values:
 
 ```yaml
-central_url: "http://your-logtrail-server:12070"
-agent_secret: "some-long-random-string"   # must match AGENT_SECRET on central
-app_name: "web-server-1"                  # label shown in the UI
+central_url: 'http://your-logtrail-server:12070'
+agent_secret: 'some-long-random-string' # must match AGENT_SECRET on central
+app_name: 'web-server-1' # label shown in the UI
 files:
   - /var/log/nginx/access.log
   - /var/log/nginx/error.log
@@ -111,17 +111,9 @@ Since the timestamp is added on receipt, it's consistent regardless of what form
 
 ## Storage
 
-Logs are stored on the central server at:
+Lines are stored in the central server's SQLite database, `data/logtrail.db`, one row per line, alongside structured events from apps using the server client.
 
-```
-ingested-logs/
-  web-server-1/
-    2026-03-18.log
-    2026-03-19.log
-    2026-03-20.log   ← today, actively written
-```
-
-Files older than 3 days are deleted automatically when logtrail starts and once per day while it runs.
+Lines older than 3 days are deleted when logtrail starts and every hour while it runs. Set `retention_days` in `logtrail.config.yaml` (or `LOGTRAIL_RETENTION_DAYS`) to change the period.
 
 ---
 

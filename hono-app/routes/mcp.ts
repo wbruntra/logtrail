@@ -114,7 +114,7 @@ function createMcpServer() {
       if (source.startsWith('ingested:')) {
         return text(await getHistory(source.slice('ingested:'.length), before, limit))
       }
-      const entry = getLogConfig().find((l: { path: string }) => l.path === source)
+      const entry = getLogConfig().find((l) => l.path === source)
       if (!entry) return fail(`Unknown log source: ${source}`)
       const absPath = path.isAbsolute(entry.path)
         ? entry.path

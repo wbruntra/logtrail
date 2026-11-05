@@ -27,7 +27,7 @@ function parseIngested(fileParam: string | undefined): string | null {
 
 // Absolute path of a log file listed in the config, or null if it isn't listed
 function configuredPath(fileParam: string | undefined): string | null {
-  const logEntry = getLogConfig().find((l: { path: string }) => l.path === fileParam)
+  const logEntry = getLogConfig().find((l) => l.path === fileParam)
   if (!logEntry) return null
   return path.isAbsolute(logEntry.path) ? logEntry.path : path.join(process.cwd(), logEntry.path)
 }
