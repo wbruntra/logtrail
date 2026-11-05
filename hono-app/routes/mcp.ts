@@ -1,26 +1,30 @@
-const { Hono } = require('hono')
-const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js')
-const {
-  WebStandardStreamableHTTPServerTransport,
-} = require('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js')
-const { z } = require('zod')
-const path = require('path')
-const { getLogConfig } = require('@/services/config')
-const { getLogHistory } = require('@/services/history-file')
-const { listApps, getIngestedHistory } = require('@/services/ingest-store')
-const { searchLogs } = require('@/services/log-search')
-const { getDashboard } = require('@/services/dashboard')
-const { requireMcpToken } = require('@/hono-app/middleware/auth')
+import path from 'node:path'
+import { requireMcpToken } from '@/hono-app/middleware/auth'
+import { getLogConfig } from '@/services/config'
+import { getDashboard, getIssue } from '@/services/dashboard'
+import { getLogHistory } from '@/services/history-file'
+import { getIngestedHistory, listApps } from '@/services/ingest-store'
+import { searchLogs } from '@/services/log-search'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
+import { Hono } from 'hono'
+import { z } from 'zod'
 
 const router = new Hono()
 router.use('*', requireMcpToken)
 
-const text = (data) => ({
+const text = (data: unknown) => ({
   content: [
-    { type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data, null, 2) },
+    {
+      type: 'text' as const,
+      text: typeof data === 'string' ? data : JSON.stringify(data, null, 2),
+    },
   ],
 })
-const fail = (message) => ({ content: [{ type: 'text', text: message }], isError: true })
+const fail = (message: string) => ({
+  content: [{ type: 'text' as const, text: message }],
+  isError: true,
+})
 
 function createMcpServer() {
   const server = new McpServer({ name: 'logtrail', version: '1.0.0' })
@@ -45,15 +49,9 @@ function createMcpServer() {
     'get_error_summary',
     {
       description:
-        'Summarize errors and warnings from ingested apps: totals, per-app counts, hourly counts, top error codes, and the most recent events (with message, request path, status and stack trace).',
+        'Summarize errors and warnings from ingested apps: totals, per-app counts, hourly counts, top error codes, issues (recurring errors grouped by fingerprint, with counts, affected users and releases), and the most recent events (with message, request path, status and stack trace). Use get_issue with an issue fingerprint for its stack and occurrences.',
       inputSchema: {
-        hours: z
-          .number()
-          .int()
-          .min(1)
-          .max(72)
-          .optional()
-          .describe('Look-back window (default 24)'),
+        hours: z.number().int().min(1).max(72).optional().describe('Look-back window (default 24)'),
         levels: z
           .array(z.enum(['error', 'warn']))
           .optional()
@@ -67,8 +65,32 @@ function createMcpServer() {
           .describe('Max recent events (default 25)'),
       },
     },
-    async ({ hours, levels, limit }) =>
-      text(getDashboard({ hours, levels: levels?.join(','), limit })),
+    async ({ hours, levels, limit }) => text(await getDashboard({ hours, levels, limit })),
+  )
+
+  server.registerTool(
+    'get_issue',
+    {
+      description:
+        'Get one issue (a recurring error or warning) by the fingerprint from get_error_summary: its summary plus its most recent occurrences, each with timestamp, request ID, user, path, status and stack trace.',
+      inputSchema: {
+        fingerprint: z
+          .string()
+          .regex(/^[0-9a-f]{16}$/)
+          .describe('Issue fingerprint'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Max occurrences, newest first (default 20)'),
+      },
+    },
+    async ({ fingerprint, limit }) => {
+      const issue = await getIssue(fingerprint, { limit })
+      return issue ? text(issue) : fail(`No issue with fingerprint ${fingerprint}`)
+    },
   )
 
   server.registerTool(
@@ -85,19 +107,14 @@ function createMcpServer() {
           .max(500)
           .optional()
           .describe('Lines to return (default 100)'),
-        before: z
-          .number()
-          .int()
-          .min(1)
-          .optional()
-          .describe('Return lines before this line number'),
+        before: z.number().int().min(1).optional().describe('Return lines before this line number'),
       },
     },
     async ({ source, limit = 100, before }) => {
       if (source.startsWith('ingested:')) {
         return text(getIngestedHistory(source.slice('ingested:'.length), before, limit))
       }
-      const entry = getLogConfig().find((l) => l.path === source)
+      const entry = getLogConfig().find((l: { path: string }) => l.path === source)
       if (!entry) return fail(`Unknown log source: ${source}`)
       const absPath = path.isAbsolute(entry.path)
         ? entry.path
@@ -105,7 +122,7 @@ function createMcpServer() {
       try {
         return text(await getLogHistory(absPath, before, limit))
       } catch (err) {
-        return fail(`Failed to read log file: ${err.message}`)
+        return fail(`Failed to read log file: ${(err as Error).message}`)
       }
     },
   )
@@ -177,4 +194,4 @@ router.all('/', async (c) => {
   return transport.handleRequest(c.req.raw)
 })
 
-module.exports = router
+export default router

@@ -346,3 +346,176 @@
   padding: 3rem 1rem;
   font-size: 0.9rem;
 }
+
+/* ── Issues ─────────────────────────────────────────────────────────── */
+
+.issue-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.issue-row:last-child {
+  border-bottom: none;
+}
+
+.issue-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.issue-level {
+  flex-shrink: 0;
+  width: 3px;
+  align-self: stretch;
+  border-radius: 2px;
+}
+
+.issue-level-error {
+  background: #dc3545;
+}
+
+.issue-level-warn {
+  background: #ffc107;
+}
+
+.issue-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.issue-msg {
+  color: #f8f9fa;
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issue-new {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0dcaf0;
+  border: 1px solid rgba(13, 202, 240, 0.5);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.issue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  margin-top: 2px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.72rem;
+  color: #6c757d;
+}
+
+.issue-meta .issue-app {
+  color: #17a2b8;
+}
+
+.issue-meta .issue-code {
+  background: rgba(108, 117, 125, 0.15);
+  padding: 0 5px;
+  border-radius: 3px;
+}
+
+.issue-stat {
+  flex-shrink: 0;
+  width: 56px;
+  text-align: right;
+}
+
+.issue-stat-wide {
+  width: 72px;
+}
+
+.issue-stat-value {
+  color: #f8f9fa;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.issue-stat-label {
+  color: #6c757d;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 576px) {
+  .issue-row .issue-stat:not(.issue-stat-wide) {
+    display: none;
+  }
+}
+
+/* ── Issue detail modal ─────────────────────────────────────────────── */
+
+.occurrence-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+.occurrence-row {
+  display: flex;
+  gap: 10px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.occurrence-row:last-child {
+  border-bottom: none;
+}
+
+.occurrence-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.occurrence-row.active {
+  background: rgba(13, 110, 253, 0.18);
+}
+
+.occurrence-row .occ-time {
+  color: #adb5bd;
+  flex-shrink: 0;
+}
+
+.occurrence-row .occ-path {
+  color: #f8f9fa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.occurrence-row .occ-user,
+.occurrence-row .occ-req {
+  color: #6c757d;
+  flex-shrink: 0;
+}
+
+.stack-trace {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  color: #f8d7da;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow: auto;
+  margin: 0;
+}
