@@ -27,17 +27,19 @@ function levelsOf(c: Context): LevelFilter[] | undefined {
 
 function filterOf(c: Context): EventFilter {
   const before = parseInt(c.req.query('before') ?? '', 10)
+  const after = parseInt(c.req.query('after') ?? '', 10)
   return {
     app: c.req.query('app') || undefined,
     levels: levelsOf(c),
     q: c.req.query('q') || undefined,
     reqId: c.req.query('reqId') || undefined,
     before: Number.isFinite(before) ? before : undefined,
+    after: Number.isFinite(after) ? after : undefined,
     limit: parseInt(c.req.query('limit') ?? '', 10) || 100,
   }
 }
 
-// Newest first; page with ?before=<nextBefore>
+// Newest first; page with ?before=<nextBefore>, catch up with ?after=<newest id held>
 router.get('/', async (c) => c.json(await listEvents(filterOf(c))))
 
 // New events as they arrive, filtered by ?app= and ?levels=

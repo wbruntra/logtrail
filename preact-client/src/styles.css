@@ -795,11 +795,27 @@ tr.quiet {
   gap: 8px;
   color: var(--text-secondary);
 }
-.live-note {
-  padding: 6px 16px;
-  font-size: 12px;
-  color: var(--good-text);
+.events {
+  position: relative;
+}
+.event-pane {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: inherit;
+}
+.event-pane.short {
+  max-height: 420px;
+}
+.event-pane > .more {
+  border-top: 0;
   border-bottom: 1px solid var(--border);
+}
+.new-lines {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-shadow: var(--shadow);
 }
 .event-list {
   list-style: none;

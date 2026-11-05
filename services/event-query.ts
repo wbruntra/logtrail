@@ -174,6 +174,8 @@ export interface EventFilter {
   reqId?: string
   /** Id cursor: only events older than this */
   before?: number
+  /** Id cursor: only events newer than this, e.g. to catch up after a stream reconnects */
+  after?: number
   limit?: number
 }
 
@@ -185,6 +187,7 @@ export async function listEvents({
   q,
   reqId,
   before,
+  after,
   limit = 100,
 }: EventFilter): Promise<EventPage> {
   const max = Math.min(Math.max(limit, 1), 500)
@@ -197,6 +200,7 @@ export async function listEvents({
   if (fingerprint) query = query.where('fingerprint', '=', fingerprint)
   if (reqId) query = query.where('req_id', '=', reqId)
   if (before !== undefined) query = query.where('id', '<', before)
+  if (after !== undefined) query = query.where('id', '>', after)
   if (levels?.length) {
     const named = levels.filter((l): l is Level => l !== 'none')
     query = query.where((eb) =>

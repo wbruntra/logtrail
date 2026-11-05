@@ -1,11 +1,10 @@
 import type { EventPage as EventPageData, EventView, Level, Overview } from '@shared/api-types.ts'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Ansi } from '../components/Ansi'
 import { Empty, ErrorBox, LevelBadge, Route, StackTrace } from '../components/ui'
 import { api, useApi } from '../lib/api'
 import { duration, time } from '../lib/format'
 import { appHref, eventHref, issueHref, Link, setQuery, useLocation } from '../lib/router'
-import { useLoadMore } from '../lib/useLoadMore'
 
 const LEVEL_CHIPS: { key: Level | 'none'; label: string }[] = [
   { key: 'error', label: 'Error' },
@@ -32,7 +31,7 @@ export function EventsPage() {
     q: query.get('q') ?? undefined,
     reqId: query.get('reqId') ?? undefined,
   }
-  const [live, setLive] = useState(false)
+  const [live, setLive] = useState(true)
   const apps = useApi<Overview>('/api/apps?hours=1')
   const [text, setText] = useState(filter.q ?? '')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -130,16 +129,20 @@ export function EventsPage() {
       )}
 
       <section class="card">
-        <EventList filter={filter} live={live} showApp={!filter.app} />
+        <EventList filter={filter} live={live} showApp={!filter.app} fill />
       </section>
     </div>
   )
 }
 
-function eventsUrl(filter: EventFilter, before?: number) {
-  const q = new URLSearchParams({ limit: '100' })
+function eventsUrl(
+  filter: EventFilter,
+  cursor: { before?: number; after?: number; limit?: number } = {},
+) {
+  const q = new URLSearchParams({ limit: String(cursor.limit ?? 100) })
   for (const [k, v] of Object.entries(filter)) if (v) q.set(k, v)
-  if (before) q.set('before', String(before))
+  if (cursor.before) q.set('before', String(cursor.before))
+  if (cursor.after) q.set('after', String(cursor.after))
   return `/api/events?${q}`
 }
 
@@ -147,122 +150,255 @@ function matchesText(e: EventView, q: string | undefined) {
   return !q || JSON.stringify(e).toLowerCase().includes(q.toLowerCase())
 }
 
-/** A newest-first list of events with "load older" paging and an optional live tail. */
+/** Most lines held while following; older ones are dropped and can be loaded again */
+const MAX_EVENTS = 2000
+/** Within this many pixels of the bottom counts as at the bottom */
+const BOTTOM_SLACK = 40
+
+/**
+ * Events oldest first, like `tail -f`: opens at the newest, follows new events
+ * while scrolled to the bottom, and loads older ones from the top. `fill` sizes
+ * the pane to the rest of the viewport; otherwise it is a short scroll box.
+ */
 export function EventList({
   filter,
   live = false,
   showApp = false,
   compact = false,
+  fill = false,
 }: {
   filter: EventFilter
   live?: boolean
   showApp?: boolean
   compact?: boolean
+  fill?: boolean
 }) {
   const key = eventsUrl(filter)
   const [events, setEvents] = useState<EventView[]>([])
-  const [next, setNext] = useState<number | null>(null)
+  const [older, setOlder] = useState<number | null>(null)
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [open, setOpen] = useState<number | null>(null)
+  const [unseen, setUnseen] = useState(0)
+  const [height, setHeight] = useState<number>()
+
+  const paneRef = useRef<HTMLDivElement>(null)
+  // Handlers outlive renders, so they read the list and position through refs
+  const eventsRef = useRef(events)
+  eventsRef.current = events
+  const following = useRef(true)
+  // How to place the scroll position once the next list renders
+  const pendingScroll = useRef<'bottom' | { top: number; height: number } | null>(null)
+
+  const show = (list: EventView[], scroll: typeof pendingScroll.current) => {
+    pendingScroll.current = scroll
+    eventsRef.current = list
+    setEvents(list)
+  }
+
+  useLayoutEffect(() => {
+    const el = paneRef.current
+    const scroll = pendingScroll.current
+    pendingScroll.current = null
+    if (!el || !scroll) return
+    el.scrollTop =
+      scroll === 'bottom' ? el.scrollHeight : scroll.top + el.scrollHeight - scroll.height
+  }, [events])
 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
     setError(null)
+    setUnseen(0)
+    following.current = true
     api<EventPageData>(key, { signal: controller.signal })
       .then((page) => {
-        setEvents(page.events)
-        setNext(page.nextBefore)
+        show(page.events.reverse(), 'bottom')
+        setOlder(page.nextBefore)
+        setLoadedKey(key)
       })
       .catch((e: Error) => e.name !== 'AbortError' && setError(e))
       .finally(() => controller.signal.aborted || setLoading(false))
     return () => controller.abort()
   }, [key])
 
+  /** Adds newer events, following them if at the bottom. */
+  const append = (incoming: EventView[]) => {
+    const list = eventsRef.current
+    const held = new Set(list.map((e) => e.id))
+    const fresh = incoming.filter((e) => !held.has(e.id))
+    if (!fresh.length) return
+    let next = list.concat(fresh)
+    if (list.length && fresh.some((e) => e.id < list[list.length - 1].id)) {
+      next.sort((a, b) => a.id - b.id)
+    }
+    if (!following.current) {
+      setUnseen((n) => n + fresh.length)
+      show(next, null)
+      return
+    }
+    if (next.length > MAX_EVENTS) {
+      next = next.slice(-MAX_EVENTS)
+      setOlder(next[0].id)
+    }
+    show(next, 'bottom')
+  }
+
+  // Stream new events once the first page is in. Each (re)connect first
+  // fetches what arrived since the newest event held, so none fall in a gap.
   useEffect(() => {
-    if (!live) return
+    if (!live || loadedKey !== key) return
     const q = new URLSearchParams()
     if (filter.app) q.set('app', filter.app)
     if (filter.levels) q.set('levels', filter.levels)
     const source = new EventSource(`/api/events/stream?${q}`, { withCredentials: true })
+    let closed = false
+    source.onopen = async () => {
+      const list = eventsRef.current
+      const newest = list[list.length - 1]?.id
+      try {
+        const page = await api<EventPageData>(eventsUrl(filter, { after: newest, limit: 500 }))
+        if (closed) return
+        if (page.nextBefore !== null && newest !== undefined) {
+          // Too many to fill the gap: start over from the newest page
+          following.current = true
+          setUnseen(0)
+          setOlder(page.nextBefore)
+          show(page.events.reverse(), 'bottom')
+        } else {
+          append(page.events.reverse())
+        }
+      } catch {
+        // The stream still delivers new events; only the gap is missing
+      }
+    }
     source.onmessage = (msg) => {
       const e = JSON.parse(msg.data) as EventView
       if (!matchesText(e, filter.q) || (filter.reqId && e.reqId !== filter.reqId)) return
-      setEvents((list) => [e, ...list].slice(0, 2000))
+      append([e])
     }
-    return () => source.close()
-  }, [live, filter.app, filter.levels, filter.q, filter.reqId])
+    return () => {
+      closed = true
+      source.close()
+    }
+  }, [live, loadedKey, key])
 
   // The filter the list currently shows, so a page that lands after the
-  // filter changed is dropped instead of appended to the wrong list
+  // filter changed is dropped instead of added to the wrong list
   const keyRef = useRef(key)
   keyRef.current = key
 
   const loadOlder = async () => {
-    if (next === null || loading) return
+    if (older === null || loading) return
     const forKey = key
     setLoading(true)
     setError(null)
     try {
-      const page = await api<EventPageData>(eventsUrl(filter, next))
+      const page = await api<EventPageData>(eventsUrl(filter, { before: older }))
       if (keyRef.current !== forKey) return
-      setEvents((list) => [...list, ...page.events])
-      setNext(page.nextBefore)
+      const el = paneRef.current
+      // Keep the lines on screen where they are as older ones go in above
+      show(
+        [...page.events.reverse(), ...eventsRef.current],
+        el ? { top: el.scrollTop, height: el.scrollHeight } : null,
+      )
+      setOlder(page.nextBefore)
     } catch (e) {
       if (keyRef.current === forKey) setError(e as Error)
     } finally {
       setLoading(false)
     }
   }
-  const sentinel = useLoadMore<HTMLDivElement>(loadOlder, {
-    enabled: next !== null && !loading && !error,
-    count: events.length,
-  })
 
-  if (error && !events.length) return <ErrorBox error={error} />
-  if (!events.length) {
-    return loading ? <div class="loading">Loading…</div> : <Empty>No matching events</Empty>
+  const onScroll = () => {
+    const el = paneRef.current
+    if (!el) return
+    following.current = el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_SLACK
+    if (following.current) setUnseen(0)
+    if (el.scrollTop < 200 && older !== null && !loading && !error) loadOlder()
   }
+
+  const toBottom = () => {
+    const el = paneRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }
+
+  // Fill the viewport below the pane's top, leaving room for what follows it
+  useLayoutEffect(() => {
+    const el = paneRef.current
+    if (!fill || !el) return
+    const fit = () => {
+      const top = el.getBoundingClientRect().top + window.scrollY
+      const below = document.documentElement.scrollHeight - (top + el.offsetHeight)
+      setHeight(Math.max(320, window.innerHeight - top - below))
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [fill, key])
 
   return (
     <div class={compact ? 'events compact' : 'events'}>
-      {live && <div class="live-note">Live: new events appear at the top</div>}
-      <ol class="event-list">
-        {events.map((e) => (
-          <li key={e.id} class={open === e.id ? 'event open' : 'event'}>
-            <button
-              type="button"
-              class="event-row"
-              aria-expanded={open === e.id}
-              onClick={() => setOpen(open === e.id ? null : e.id)}
-            >
-              <span class="event-time" title={e.ts}>
-                {time(e.ts)}
-              </span>
-              {showApp && <span class="event-app">{e.app}</span>}
-              <LevelBadge level={e.level} />
-              <span class="event-msg">
-                {e.status !== null && (
-                  <span class={`status s${String(e.status)[0]}`}>{e.status}</span>
-                )}
-                <Ansi text={e.msg} />
-              </span>
-            </button>
-            {open === e.id && <EventInline e={e} />}
-          </li>
-        ))}
-      </ol>
-      {error && <ErrorBox error={error} />}
-      <div class="more" ref={sentinel}>
-        {next !== null ? (
-          <button type="button" class="btn" disabled={loading} onClick={loadOlder}>
-            {loading ? 'Loading…' : error ? 'Retry' : 'Load older'}
-          </button>
+      <div
+        class={fill ? 'event-pane' : 'event-pane short'}
+        ref={paneRef}
+        style={height ? { height: `${height}px` } : undefined}
+        onScroll={onScroll}
+      >
+        {error && !events.length ? (
+          <ErrorBox error={error} />
+        ) : !events.length ? (
+          loading ? (
+            <div class="loading">Loading…</div>
+          ) : (
+            <Empty>No matching events</Empty>
+          )
         ) : (
-          <span class="muted small">End of retained events</span>
+          <>
+            <div class="more">
+              {older !== null ? (
+                <button type="button" class="btn" disabled={loading} onClick={loadOlder}>
+                  {loading ? 'Loading…' : error ? 'Retry' : 'Load older'}
+                </button>
+              ) : (
+                <span class="muted small">Start of retained events</span>
+              )}
+            </div>
+            {error && <ErrorBox error={error} />}
+            <ol class="event-list">
+              {events.map((e) => (
+                <li key={e.id} class={open === e.id ? 'event open' : 'event'}>
+                  <button
+                    type="button"
+                    class="event-row"
+                    aria-expanded={open === e.id}
+                    onClick={() => setOpen(open === e.id ? null : e.id)}
+                  >
+                    <span class="event-time" title={e.ts}>
+                      {time(e.ts)}
+                    </span>
+                    {showApp && <span class="event-app">{e.app}</span>}
+                    <LevelBadge level={e.level} />
+                    <span class="event-msg">
+                      {e.status !== null && (
+                        <span class={`status s${String(e.status)[0]}`}>{e.status}</span>
+                      )}
+                      <Ansi text={e.msg} />
+                    </span>
+                  </button>
+                  {open === e.id && <EventInline e={e} />}
+                </li>
+              ))}
+            </ol>
+          </>
         )}
       </div>
+      {unseen > 0 && (
+        <button type="button" class="btn new-lines" onClick={toBottom}>
+          {unseen} new {unseen === 1 ? 'line' : 'lines'} ↓
+        </button>
+      )}
     </div>
   )
 }

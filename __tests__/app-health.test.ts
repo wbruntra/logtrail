@@ -274,6 +274,19 @@ describe('events', () => {
     expect(lines.events.map((e) => e.app)).toEqual(['agent'])
   })
 
+  it('catches up on events newer than a cursor, with nextBefore marking a remaining gap', async () => {
+    const [held] = await insertLines('agent', ['held'])
+    await insertLines('agent', ['missed 1', 'missed 2', 'missed 3'])
+
+    const all = await listEvents({ after: held.id })
+    expect(all).toMatchObject({ nextBefore: null })
+    expect(all.events.map((e) => e.msg)).toEqual(['missed 3', 'missed 2', 'missed 1'])
+
+    const some = await listEvents({ after: held.id, limit: 2 })
+    expect(some.events.map((e) => e.msg)).toEqual(['missed 3', 'missed 2'])
+    expect(some.nextBefore).not.toBeNull()
+  })
+
   it('returns an event with its request trace across apps and its neighbors', async () => {
     const [a] = await insertEvents('web', [event({ reqId: 'r1', msg: 'web failed', orderId: 7 })])
     await insertEvents('api', [event({ reqId: 'r1', msg: 'api failed' })])
