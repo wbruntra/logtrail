@@ -9,7 +9,8 @@ import { getLogHistory } from '@/services/history-file'
 import { searchLogs } from '@/services/log-search'
 import { tailFile } from '@/services/tail-file'
 import { Hono } from 'hono'
-import { type SSEStreamingApi, streamSSE } from 'hono/streaming'
+import { streamSSE } from 'hono/streaming'
+import { holdOpen } from '@/hono-app/sse'
 
 const execAsync = promisify(exec)
 
@@ -94,22 +95,6 @@ router.get('/list', async (c) => {
 
   return c.json({ logs: [...configuredLogs, ...ingestedLogs] })
 })
-
-// Holds an SSE stream open, sending a heartbeat every 15 seconds to keep
-// intermediate proxies/load balancers alive, until the client goes away.
-async function holdOpen(stream: SSEStreamingApi, cleanup: () => void): Promise<void> {
-  const heartbeatInterval = setInterval(() => {
-    stream.writeSSE({ event: 'ping', data: 'heartbeat' })
-  }, 15000)
-
-  await new Promise<void>((resolve) => {
-    stream.onAbort(() => {
-      clearInterval(heartbeatInterval)
-      cleanup()
-      resolve()
-    })
-  })
-}
 
 // Streaming endpoint for any configured log file or ingested app
 router.get('/stream', (c) => {

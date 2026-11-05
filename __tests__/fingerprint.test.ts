@@ -1,4 +1,4 @@
-import { fingerprint, normalizePath, topFrame } from '@/services/fingerprint'
+import { fingerprint, isSlugId, normalizePath, topFrame } from '@/services/fingerprint'
 import { describe, expect, it } from 'bun:test'
 
 const base = { app: 'a', level: 'error', msg: 'Order 1234 not found', route: '/orders/:id' }
@@ -30,6 +30,41 @@ describe('fingerprint', () => {
   it('normalizes ids in paths', () => {
     expect(normalizePath('/users/123/files/550e8400-e29b-41d4-a716-446655440000?x=1')).toBe(
       '/users/:id/files/:id',
+    )
+    expect(normalizePath('/public/talent-sheet/roster-view/2ExX98E')).toBe(
+      '/public/talent-sheet/roster-view/:id',
+    )
+    expect(normalizePath('/auth/8sMSLicD9Q8Xl8wfP4fPB_XCeJ0UGX_XFXDOIkGgteQ')).toBe('/auth/:id')
+  })
+
+  it('keeps words and version segments in paths', () => {
+    expect(normalizePath('/api/v2/roster-view/settings')).toBe('/api/v2/roster-view/settings')
+    expect(normalizePath('/api/advanced-filters-ai/oauth2')).toBe('/api/advanced-filters-ai/oauth2')
+    expect(normalizePath('/api/system/fileView/TalentSheets')).toBe(
+      '/api/system/fileView/TalentSheets',
+    )
+  })
+
+  it('recognizes letter-only ids by their irregular case', () => {
+    for (const id of ['KvxBvxE', 'wAQkxdm', 'eVZaxKP', 'ZbXQDVd']) expect(isSlugId(id)).toBe(true)
+    for (const word of ['fileView', 'TalentSheets', 'settings', 'roster-view', 'v2', 'oauth2'])
+      expect(isSlugId(word)).toBe(false)
+  })
+
+  it('groups requests to the same route whose message embeds the path', () => {
+    const req = (path: string) => ({
+      app: 'a',
+      level: 'warn',
+      method: 'GET',
+      path,
+      status: 404,
+      msg: `GET ${path} 404`,
+    })
+    expect(fingerprint(req('/public/talent-sheet/roster-view/2ExX98E'))).toBe(
+      fingerprint(req('/public/talent-sheet/roster-view/YAPe2WZ')),
+    )
+    expect(fingerprint(req('/public/profile/eVZaxKP/team/ZbXQDVd'))).toBe(
+      fingerprint(req('/public/profile/qP1ydOP/team/ewnlGb9')),
     )
   })
 

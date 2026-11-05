@@ -1,5 +1,7 @@
 import { db } from '@database/db'
-import type { EventRow } from '@database/schema'
+import type { EventRow, Level } from '@database/schema'
+import type { EventDetail, EventPage, EventView } from '@/shared/api-types'
+import { sql } from 'kysely'
 import { eventEmitter, toEvent } from './event-store'
 
 // Read side of the event store, shaped for the log viewer and MCP: each event is
@@ -97,6 +99,134 @@ export async function getContext(app: string, id: number, contextLines: number) 
 export function subscribe(app: string, onLine: (line: LogLine) => void): () => void {
   const listener = (rows: EventRow[]) => {
     for (const row of rows) if (row.app === app) onLine(toLine(row))
+  }
+  eventEmitter.on('events', listener)
+  return () => eventEmitter.off('events', listener)
+}
+
+// Everything a rendered line shows, so substring and regex search see the same text
+export const SEARCH_TEXT = sql<string>`ts || ' ' || ifnull(level, '') || ' ' || msg || ' ' ||
+  ifnull(code, '') || ' ' || ifnull(method, '') || ' ' || ifnull(path, '') || ' ' ||
+  ifnull(route, '') || ' ' || ifnull(status, '') || ' ' || ifnull(req_id, '') || ' ' ||
+  ifnull(user_id, '') || ' ' || ifnull(release, '') || ' ' || ifnull(stack, '') || ' ' ||
+  ifnull(extra, '')`
+
+export function toEventView(row: EventRow): EventView {
+  return {
+    id: row.id,
+    app: row.app,
+    ts: row.ts,
+    receivedAt: row.received_at,
+    level: row.level,
+    msg: row.msg,
+    code: row.code,
+    reqId: row.req_id,
+    method: row.method,
+    path: row.path,
+    route: row.route,
+    status: row.status,
+    duration: row.duration_ms,
+    userId: row.user_id,
+    release: row.release,
+    stack: row.stack,
+    fingerprint: row.fingerprint,
+    extra: row.extra ? JSON.parse(row.extra) : null,
+  }
+}
+
+/** A level, or 'none' for the agent's unstructured lines */
+export type LevelFilter = Level | 'none'
+
+export interface EventFilter {
+  app?: string
+  fingerprint?: string
+  levels?: LevelFilter[]
+  /** Case-insensitive substring of any text field */
+  q?: string
+  reqId?: string
+  /** Id cursor: only events older than this */
+  before?: number
+  limit?: number
+}
+
+/** Matching events, newest first, a page at a time. */
+export async function listEvents({
+  app,
+  fingerprint,
+  levels,
+  q,
+  reqId,
+  before,
+  limit = 100,
+}: EventFilter): Promise<EventPage> {
+  const max = Math.min(Math.max(limit, 1), 500)
+  let query = db
+    .selectFrom('events')
+    .selectAll()
+    .orderBy('id', 'desc')
+    .limit(max + 1)
+  if (app) query = query.where('app', '=', app)
+  if (fingerprint) query = query.where('fingerprint', '=', fingerprint)
+  if (reqId) query = query.where('req_id', '=', reqId)
+  if (before !== undefined) query = query.where('id', '<', before)
+  if (levels?.length) {
+    const named = levels.filter((l): l is Level => l !== 'none')
+    query = query.where((eb) =>
+      eb.or([
+        ...(named.length ? [eb('level', 'in', named)] : []),
+        ...(levels.includes('none') ? [eb('level', 'is', null)] : []),
+      ]),
+    )
+  }
+  if (q?.trim()) {
+    query = query.where(sql<boolean>`instr(lower(${SEARCH_TEXT}), lower(${q.trim()})) > 0`)
+  }
+
+  const rows = await query.execute()
+  const page = rows.slice(0, max)
+  return {
+    events: page.map(toEventView),
+    nextBefore: rows.length > max ? page[page.length - 1].id : null,
+  }
+}
+
+/** One event with its request trace and neighboring events, or null if it has expired. */
+export async function getEventDetail(id: number, neighbors = 10): Promise<EventDetail | null> {
+  const row = await db.selectFrom('events').selectAll().where('id', '=', id).executeTakeFirst()
+  if (!row) return null
+
+  const [trace, { before, after }] = await Promise.all([
+    row.req_id
+      ? db
+          .selectFrom('events')
+          .selectAll()
+          .where('req_id', '=', row.req_id)
+          .orderBy('ts')
+          .orderBy('id')
+          .limit(200)
+          .execute()
+      : Promise.resolve([]),
+    getNeighbors(row.app, id, neighbors),
+  ])
+  return {
+    event: toEventView(row),
+    trace: trace.map(toEventView),
+    before: before.map(toEventView),
+    after: after.map(toEventView),
+  }
+}
+
+/** Calls onEvent for each new event matching the filter's app and levels. */
+export function subscribeEvents(
+  filter: Pick<EventFilter, 'app' | 'levels'>,
+  onEvent: (event: EventView) => void,
+): () => void {
+  const listener = (rows: EventRow[]) => {
+    for (const row of rows) {
+      if (filter.app && row.app !== filter.app) continue
+      if (filter.levels?.length && !filter.levels.includes(row.level ?? 'none')) continue
+      onEvent(toEventView(row))
+    }
   }
   eventEmitter.on('events', listener)
   return () => eventEmitter.off('events', listener)

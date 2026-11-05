@@ -37,9 +37,10 @@
       tags: [deps]
 
     - name: 4. Build frontend
+      # nginx serves preact-client/dist; the old React client/ is no longer built.
       shell: bun install --frozen-lockfile && bun run build
       args:
-        chdir: '{{ project_root }}/client'
+        chdir: '{{ project_root }}/preact-client'
       tags: [build, frontend]
 
     - name: 5. Restart the app (pm2)
@@ -118,7 +119,7 @@
             url: '{{ public_url }}/'
             return_content: yes
           register: public_page
-          failed_when: '''<div id="root">'' not in public_page.content'
+          failed_when: '''<div id="app">'' not in public_page.content'
           changed_when: false
 
         - name: API answers

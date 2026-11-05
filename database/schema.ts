@@ -31,8 +31,20 @@ export interface EventsTable {
   extra: string | null
 }
 
+export const ISSUE_STATUSES = ['resolved', 'muted'] as const
+export type IssueStatus = (typeof ISSUE_STATUSES)[number]
+
+/** Triage state of an issue. Open issues have no row. */
+export interface IssueStatesTable {
+  fingerprint: string
+  status: IssueStatus
+  /** When the status was set. A resolved issue seen after this reopens. */
+  changed_at: string
+}
+
 export interface Database {
   events: EventsTable
+  issue_states: IssueStatesTable
 }
 
 export type EventRow = Selectable<EventsTable>

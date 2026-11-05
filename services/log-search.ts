@@ -1,20 +1,13 @@
 import { db } from '@database/db'
 import type { EventRow } from '@database/schema'
 import { sql } from 'kysely'
-import { getNeighbors, listApps, type LogLine, toLine } from './event-query'
+import { getNeighbors, listApps, type LogLine, SEARCH_TEXT, toLine } from './event-query'
 
 // Searches ingested events. Plain queries match in SQL against the event's text
 // fields; regex queries are narrowed by the other filters in SQL, then matched in
 // JS against the rendered line (bun:sqlite cannot register a REGEXP function).
 
 const REGEX_BATCH = 5000
-
-// Everything a rendered line shows, so substring and regex search see the same text
-const SEARCH_TEXT = sql<string>`ts || ' ' || ifnull(level, '') || ' ' || msg || ' ' ||
-  ifnull(code, '') || ' ' || ifnull(method, '') || ' ' || ifnull(path, '') || ' ' ||
-  ifnull(route, '') || ' ' || ifnull(status, '') || ' ' || ifnull(req_id, '') || ' ' ||
-  ifnull(user_id, '') || ' ' || ifnull(release, '') || ' ' || ifnull(stack, '') || ' ' ||
-  ifnull(extra, '')`
 
 export interface SearchOptions {
   /** Limit to one app; all apps by default */

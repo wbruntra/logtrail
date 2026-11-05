@@ -22,5 +22,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.js", "ecosystem.config.cjs"],
-  "exclude": ["node_modules", "dist", "client"]
+  "exclude": ["node_modules", "dist", "client", "preact-client"]
 }

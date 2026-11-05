@@ -1,37 +1,19 @@
 import { db } from '@database/db'
 import type { EventRow } from '@database/schema'
+import type { AlertLevel } from '@/shared/api-types'
 import { sql } from 'kysely'
 import { type EventJson, toEvent } from './event-store'
-import { normalizePath } from './fingerprint'
+import { ALERT_LEVELS, issueSummaries } from './issues'
+
+export type { Issue } from './issues'
 
 export const MAX_HOURS = 72
-const ALERT_LEVELS = ['error', 'warn'] as const
-type AlertLevel = (typeof ALERT_LEVELS)[number]
 
 export interface DashboardOptions {
   hours?: number | string
   /** Levels for recentErrors and issues: comma-separated or an array (default both) */
   levels?: string | string[]
   limit?: number | string
-}
-
-export interface Issue {
-  fingerprint: string
-  app: string
-  level: AlertLevel
-  msg: string
-  code: string | null
-  method: string | null
-  /** Route pattern, or the request path with ids replaced */
-  route: string | null
-  status: number | null
-  count: number
-  users: number
-  /** Earliest occurrence still retained, regardless of the dashboard window */
-  firstSeen: string
-  lastSeen: string
-  releases: string[]
-  latestId: number
 }
 
 function int(value: number | string | undefined, fallback: number, max: number): number {
@@ -64,87 +46,6 @@ function recentError(row: EventRow) {
     userId: row.user_id,
     stack: row.stack,
   }
-}
-
-interface IssueFilter {
-  fingerprints?: string[]
-  levels?: AlertLevel[]
-  since?: string
-  limit: number
-}
-
-/** Errors and warnings grouped by fingerprint, most recently seen first. */
-async function issueSummaries({
-  fingerprints,
-  levels,
-  since,
-  limit,
-}: IssueFilter): Promise<Issue[]> {
-  let groups = db
-    .selectFrom('events')
-    .where('fingerprint', 'is not', null)
-    .select((eb) => [
-      'fingerprint',
-      eb.fn.countAll<number>().as('count'),
-      eb.fn.count<number>('user_id').distinct().as('users'),
-      eb.fn.max('ts').as('lastSeen'),
-      eb.fn.max('id').as('latestId'),
-      sql<string | null>`group_concat(distinct release)`.as('releases'),
-    ])
-    .groupBy('fingerprint')
-    .orderBy('lastSeen', 'desc')
-    .limit(limit)
-    .$narrowType<{ fingerprint: string }>()
-  if (fingerprints) groups = groups.where('fingerprint', 'in', fingerprints)
-  if (levels) groups = groups.where('level', 'in', levels)
-  if (since) groups = groups.where('ts', '>=', since)
-
-  const rows = await groups.execute()
-  if (!rows.length) return []
-
-  const [latest, firstSeen] = await Promise.all([
-    db
-      .selectFrom('events')
-      .selectAll()
-      .where(
-        'id',
-        'in',
-        rows.map((r) => r.latestId),
-      )
-      .execute(),
-    db
-      .selectFrom('events')
-      .select((eb) => ['fingerprint', eb.fn.min('ts').as('firstSeen')])
-      .where(
-        'fingerprint',
-        'in',
-        rows.map((r) => r.fingerprint),
-      )
-      .groupBy('fingerprint')
-      .execute(),
-  ])
-  const latestById = new Map(latest.map((e) => [e.id, e]))
-  const firstSeenByFp = new Map(firstSeen.map((f) => [f.fingerprint, f.firstSeen]))
-
-  return rows.map((r) => {
-    const e = latestById.get(r.latestId)!
-    return {
-      fingerprint: r.fingerprint,
-      app: e.app,
-      level: e.level as AlertLevel,
-      msg: e.msg,
-      code: e.code,
-      method: e.method,
-      route: e.route ?? (e.path ? normalizePath(e.path) : null),
-      status: e.status,
-      count: r.count,
-      users: r.users,
-      firstSeen: firstSeenByFp.get(r.fingerprint) ?? r.lastSeen,
-      lastSeen: r.lastSeen,
-      releases: r.releases ? r.releases.split(',').sort() : [],
-      latestId: r.latestId,
-    }
-  })
 }
 
 export async function getDashboard(options: DashboardOptions = {}) {
