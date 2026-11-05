@@ -9,7 +9,8 @@
     "client": "cd client && bun run dev",
     "start": "bun hono-app/bin/www.ts",
     "verify:ingested-stream": "bun scripts/verify-ingested-stream.ts",
-    "deploy": "ansible-playbook -i ansible/inventory.yml ansible/deploy.yml -e deployment=production"
+    "deploy": "ansible-playbook -i ansible/inventory.yml ansible/deploy.yml -e deployment=production",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "keywords": [],
   "author": "",
