@@ -329,9 +329,11 @@ export function EventList({
     const el = paneRef.current
     if (!fill || !el) return
     const fit = () => {
-      const top = el.getBoundingClientRect().top + window.scrollY
-      const below = document.documentElement.scrollHeight - (top + el.offsetHeight)
-      setHeight(Math.max(320, window.innerHeight - top - below))
+      const pane = el.getBoundingClientRect()
+      // Measured to the end of <main> (its padding, the card's border), not the
+      // document, which is never shorter than the viewport
+      const below = (el.closest('main') ?? el).getBoundingClientRect().bottom - pane.bottom
+      setHeight(Math.max(320, window.innerHeight - (pane.top + window.scrollY) - below))
     }
     fit()
     window.addEventListener('resize', fit)

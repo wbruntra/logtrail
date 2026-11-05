@@ -804,7 +804,7 @@ tr.quiet {
   border-radius: inherit;
 }
 .event-pane.short {
-  max-height: 420px;
+  max-height: max(420px, 70vh);
 }
 .event-pane > .more {
   border-top: 0;
