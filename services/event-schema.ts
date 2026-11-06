@@ -65,7 +65,7 @@ function describe(error: z.ZodError): string {
  * Accepts, in order of preference:
  *   { app, service?, env?, events: [...] }  batch of structured events (sdk/logtrail.ts)
  *   { app, level, msg, ...fields }    single structured event (logtrail-middleware.js)
- *   { app, service?, env?, file?, lines: string[] }  raw lines from a log file (the agent),
+ *   { app, service?, env?, file?, requestAlerts?, lines: string[] }  raw lines from a log file (the agent),
  *                                    parsed into events by ./line-parser
  * A bare { app, msg } without a level is rejected.
  */
@@ -80,6 +80,7 @@ export function parseIngestPayload(body: unknown): IngestPayload {
     events,
     lines,
     file,
+    requestAlerts,
     ...rest
   } = body as Record<string, unknown>
 
@@ -112,7 +113,7 @@ export function parseIngestPayload(body: unknown): IngestPayload {
   if (Array.isArray(lines)) {
     const strings = lines.filter((l): l is string => typeof l === 'string').map(clip(MAX_LINE))
     const fileName = typeof file === 'string' ? clip(200)(file) : undefined
-    const parsed = parseLines(strings)
+    const parsed = parseLines(strings, { requestAlerts: requestAlerts !== false })
     if (!parsed.length) return { kind: 'invalid', error: 'No valid lines provided' }
     const valid: IngestEvent[] = []
     const rejected: RejectedEvent[] = []

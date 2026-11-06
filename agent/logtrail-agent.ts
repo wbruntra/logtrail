@@ -26,6 +26,8 @@ interface Tags {
 
 interface FileEntry extends Tags {
   filePath: string
+  /** false when the app reports its errors itself: access lines stay debug events */
+  requestAlerts: boolean
 }
 
 const args = process.argv.slice(2)
@@ -57,7 +59,7 @@ const defaults = {
 }
 
 const entries: FileEntry[] = config.files.map((entry: unknown) => {
-  const e = typeof entry === 'string' ? { path: entry } : (entry as Record<string, string>)
+  const e = typeof entry === 'string' ? { path: entry } : (entry as Record<string, any>)
   if (!e || typeof e.path !== 'string') fail(`Invalid file entry: ${JSON.stringify(entry)}`)
   const app = e.app ?? defaults.app
   if (!app) fail(`No app for ${e.path}: set app on the file or at the top of the config`)
@@ -66,6 +68,7 @@ const entries: FileEntry[] = config.files.map((entry: unknown) => {
     app,
     service: e.service ?? defaults.service ?? app,
     env: e.env ?? defaults.env,
+    requestAlerts: (e.request_alerts ?? config.request_alerts) !== false,
   }
 })
 
@@ -76,6 +79,7 @@ const MAX_BUFFER_SIZE = 5000
 const BATCH_LINES = 200
 
 interface Queue extends Tags {
+  requestAlerts: boolean
   file: string
   lines: string[]
   sending: boolean
@@ -89,7 +93,14 @@ async function send(q: Queue, lines: string[]): Promise<boolean> {
     const res = await fetch(`${centralUrl}/api/ingest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-      body: JSON.stringify({ app: q.app, service: q.service, env: q.env, file: q.file, lines }),
+      body: JSON.stringify({
+        app: q.app,
+        service: q.service,
+        env: q.env,
+        file: q.file,
+        requestAlerts: q.requestAlerts,
+        lines,
+      }),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text().catch(() => '')}`)
     if (q.lastError !== null) console.log(`[agent] Reconnected (${q.file})`)

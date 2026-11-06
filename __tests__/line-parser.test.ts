@@ -18,6 +18,11 @@ describe('parseLines', () => {
     expect(boom).toMatchObject({ level: 'error', status: 500 })
   })
 
+  it('keeps 4xx/5xx access lines as debug when requestAlerts is off', () => {
+    const [failed] = parseLines(['POST /api/pay 500 12 ms - 9'], { requestAlerts: false })
+    expect(failed).toMatchObject({ level: 'debug', status: 500, msg: 'POST /api/pay 500' })
+  })
+
   it('maps JSON lines from pino and others', () => {
     const [pino, named, withErr] = parseLines([
       JSON.stringify({ level: 50, time: 1793945000000, msg: 'db down', reqId: 'r1', tenant: 'a' }),

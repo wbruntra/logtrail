@@ -17,8 +17,8 @@
  *   ...routes...
  *   app.use(logtrail.expressErrors())
  *
- * Every 4xx/5xx response becomes one event (with logRequests: true, every request does,
- * successful ones as debug), with the thrown error's message,
+ * Every 4xx/5xx response becomes one event (requests: 'all' adds successful ones as debug;
+ * requests: 'errors' keeps only thrown errors), with the thrown error's message,
  * code and stack when there is one. Inside a request, reqId and userId are
  * attached automatically:
  *   logtrail.log('info', 'Payment processed', { amount })
@@ -85,9 +85,14 @@ export interface LogtrailOptions {
   /** Return true to skip a request, e.g. health checks or bot 404s. */
   skip?: (info: RequestInfo) => boolean
   /**
-   * Also record successful requests (below 400) as debug events: method, route, status
-   * and duration, like an access log. Default false, so only problems are sent.
+   * Which requests become events:
+   *   'problems' (default) 4xx/5xx responses and thrown errors
+   *   'errors'   only requests that threw, with the error's message, code and stack; use this
+   *              when a log file agent already ships the access log and console output
+   *   'all'      also successful requests, as debug events (an access log)
    */
+  requests?: 'problems' | 'errors' | 'all'
+  /** Same as requests: 'all'. */
   logRequests?: boolean
   /** Events per request to logtrail (default 50) */
   batchSize?: number
@@ -221,6 +226,7 @@ export function createLogtrail(options: LogtrailOptions) {
     getUser = defaultGetUser,
     skip,
     logRequests = false,
+    requests = logRequests ? 'all' : 'problems',
     batchSize = 50,
     flushIntervalMs = 2000,
     maxQueue = 1000,
@@ -323,7 +329,8 @@ export function createLogtrail(options: LogtrailOptions) {
   function requestEvent(info: RequestInfo, duration: number): NewEvent | undefined {
     const { method, path, route, status, error } = info
     const ok = error === undefined && status < 400
-    if (ok && !logRequests) return
+    if (requests === 'errors' && error === undefined) return
+    if (ok && requests !== 'all') return
     if (skip?.(info)) return
     if (ok) {
       return {

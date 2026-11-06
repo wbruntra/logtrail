@@ -125,6 +125,23 @@ describe('hono()', () => {
     expect(quiet.events().filter((e) => e.method === 'GET')).toEqual([])
   })
 
+  it("requests: 'errors' reports only requests that threw", async () => {
+    const { logtrail, events } = client({ requests: 'errors' })
+    const app = honoApp(logtrail)
+    await app.request('/ok')
+    await app.request('/api/users/1') // a plain 410 response
+    await app.request('/orders/7')
+    await logtrail.flush()
+    const requests = events().filter((e) => e.method === 'GET')
+    expect(requests).toHaveLength(1)
+    expect(requests[0]).toMatchObject({
+      level: 'error',
+      msg: 'Order lookup failed',
+      code: 'DB_DOWN',
+    })
+    expect(requests[0].stack).toContain('Order lookup failed')
+  })
+
   it('honours skip()', async () => {
     const { logtrail, events } = client({ skip: (r) => r.status === 404 })
     await honoApp(logtrail).request('/missing')

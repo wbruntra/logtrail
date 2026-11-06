@@ -69,13 +69,13 @@ function fromJson(line: string): ParsedLine | undefined {
   return parsed
 }
 
-function fromAccess(text: string): ParsedLine | undefined {
+function fromAccess(text: string, alerts: boolean): ParsedLine | undefined {
   const m = ACCESS.exec(text)
   if (!m) return undefined
   const status = Number(m[3])
   const path = m[2].split('?')[0]
   return {
-    level: status >= 500 ? 'error' : status >= 400 ? 'warn' : 'debug',
+    level: !alerts ? 'debug' : status >= 500 ? 'error' : status >= 400 ? 'warn' : 'debug',
     msg: `${m[1]} ${path} ${status}`,
     method: m[1],
     path,
@@ -94,7 +94,19 @@ function fromText(text: string): ParsedLine {
   return { level: level ?? 'info', msg: rest, ts: ts ? isoOf(ts[1]) : undefined }
 }
 
-export function parseLines(lines: string[]): ParsedLine[] {
+export interface ParseOptions {
+  /**
+   * Whether 4xx/5xx access lines are warnings and errors (default). Turn off when the app
+   * reports its errors itself, so a failed request isn't an issue twice; the lines stay
+   * as debug events with their status.
+   */
+  requestAlerts?: boolean
+}
+
+export function parseLines(
+  lines: string[],
+  { requestAlerts = true }: ParseOptions = {},
+): ParsedLine[] {
   const events: ParsedLine[] = []
   for (const raw of lines) {
     const text = raw.replace(ANSI, '').trimEnd()
@@ -104,7 +116,7 @@ export function parseLines(lines: string[]): ParsedLine[] {
       previous.stack = previous.stack ? `${previous.stack}\n${text}` : `${previous.msg}\n${text}`
       continue
     }
-    events.push(fromJson(text) ?? fromAccess(text.trim()) ?? fromText(text.trim()))
+    events.push(fromJson(text) ?? fromAccess(text.trim(), requestAlerts) ?? fromText(text.trim()))
   }
   return events
 }

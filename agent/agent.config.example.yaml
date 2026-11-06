@@ -6,6 +6,9 @@ central_url: 'https://logtrail2.example.com'
 # Defaults for every file below
 app: talent-sales # the product or codebase; shared by all its processes
 env: production
+# Set false when the app also reports errors through the SDK (requests: 'errors'). Then 4xx/5xx
+# access lines stay debug events instead of becoming issues a second time. Per file too.
+request_alerts: false
 
 files:
   # Each file says which service of the app it belongs to

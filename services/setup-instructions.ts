@@ -112,6 +112,18 @@ files:
     service: worker
 \`\`\`
 
+### Agent for logs, client for errors
+
+The usual split: the agent ships all log output (morgan, console, libraries), and the client
+only reports errors, with stack traces, request ids and users. To avoid every event arriving
+twice:
+
+- In the app, use the same \`app\` and \`service\` as the agent's file and create the client with
+  \`requests: 'errors'\` (only requests that threw are sent). Do not call \`captureConsole()\`. Keep
+  the middleware and \`captureProcessErrors()\`.
+- In the agent config, set \`request_alerts: false\` for that file, so its 4xx/5xx access lines
+  stay debug events and the errors the app reports are the only issues.
+
 Run \`LOGTRAIL_SECRET=... bun logtrail-agent.ts --config agent.config.yaml\` (under pm2 for
 production). It needs \`tail-stream\` (\`bun add tail-stream\`). The secret is read from the
 environment, not the file.
