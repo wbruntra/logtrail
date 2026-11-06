@@ -84,6 +84,8 @@ logtrail.captureConsole()       // console.* still prints and is also sent as ev
 
 Pass \`getUser: (ctx) => ctx.get('user')?.id\` if requests have a logged-in user, and
 \`skip: ({ path }) => path === '/health'\` to leave out health checks and bot noise.
+Only 4xx/5xx responses are recorded by default. Set \`logRequests: true\` to also record successful requests (as \`debug\` events with route, status and duration), which replaces an access log such as morgan. Output a library writes straight to stdout (morgan, pino) is not captured by \`captureConsole()\`; route it through \`console\` or the client if it matters.
+
 Elsewhere in the code, \`logtrail.log('info', 'message', { extra })\` and \`logtrail.error(err, { extra })\` send events with the current request's id attached.
 
 ## 5. Clean up

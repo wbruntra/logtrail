@@ -17,7 +17,8 @@
  *   ...routes...
  *   app.use(logtrail.expressErrors())
  *
- * Every 4xx/5xx response becomes one event, with the thrown error's message,
+ * Every 4xx/5xx response becomes one event (with logRequests: true, every request does,
+ * successful ones as debug), with the thrown error's message,
  * code and stack when there is one. Inside a request, reqId and userId are
  * attached automatically:
  *   logtrail.log('info', 'Payment processed', { amount })
@@ -83,6 +84,11 @@ export interface LogtrailOptions {
   getUser?: (ctx: any) => string | number | null | undefined
   /** Return true to skip a request, e.g. health checks or bot 404s. */
   skip?: (info: RequestInfo) => boolean
+  /**
+   * Also record successful requests (below 400) as debug events: method, route, status
+   * and duration, like an access log. Default false, so only problems are sent.
+   */
+  logRequests?: boolean
   /** Events per request to logtrail (default 50) */
   batchSize?: number
   /** Max wait before sending a partial batch (default 2000) */
@@ -214,6 +220,7 @@ export function createLogtrail(options: LogtrailOptions) {
     release,
     getUser = defaultGetUser,
     skip,
+    logRequests = false,
     batchSize = 50,
     flushIntervalMs = 2000,
     maxQueue = 1000,
@@ -315,8 +322,20 @@ export function createLogtrail(options: LogtrailOptions) {
 
   function requestEvent(info: RequestInfo, duration: number): NewEvent | undefined {
     const { method, path, route, status, error } = info
-    if (error === undefined && status < 400) return
+    const ok = error === undefined && status < 400
+    if (ok && !logRequests) return
     if (skip?.(info)) return
+    if (ok) {
+      return {
+        level: 'debug',
+        msg: `${method} ${path} ${status}`,
+        method,
+        path,
+        route,
+        status,
+        duration,
+      }
+    }
     const err = error === undefined ? undefined : toError(error)
     const level: Level = status >= 500 || (err && status < 400) ? 'error' : 'warn'
     return {

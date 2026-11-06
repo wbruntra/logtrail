@@ -111,6 +111,20 @@ describe('hono()', () => {
     ])
   })
 
+  it('records successful requests as debug events with logRequests', async () => {
+    const { logtrail, events } = client({ logRequests: true })
+    await honoApp(logtrail).request('/ok')
+    await logtrail.flush()
+    const request = events().find((e) => e.method === 'GET')
+    expect(request).toMatchObject({ level: 'debug', msg: 'GET /ok 200', status: 200, route: '/ok' })
+    expect(typeof request?.duration).toBe('number')
+
+    const quiet = client()
+    await honoApp(quiet.logtrail).request('/ok')
+    await quiet.logtrail.flush()
+    expect(quiet.events().filter((e) => e.method === 'GET')).toEqual([])
+  })
+
   it('honours skip()', async () => {
     const { logtrail, events } = client({ skip: (r) => r.status === 404 })
     await honoApp(logtrail).request('/missing')
