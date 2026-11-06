@@ -87,6 +87,14 @@ bun run deploy:agent
 - Local log files to monitor
 - Security settings
 
+## Data Storage
+
+Ingested events live in a SQLite database at `data/logtrail.db` (gitignored), created on first start; migrations run automatically at startup. Set `LOGTRAIL_DB` to use another path.
+
+- **Retention:** events older than `retention_days` in `logtrail.config.yaml` (default 3; `LOGTRAIL_RETENTION_DAYS` overrides) are deleted at startup and hourly.
+- **Backups:** the database runs in WAL mode, so copy it with `sqlite3 data/logtrail.db ".backup backup.db"` rather than `cp`.
+- **Moving from the old file store:** logs used to be written to `ingested-logs/<app>/<date>.log`. The Ansible deploy imports that directory once (`bun scripts/import-ingested-logs.ts`) and renames it to `ingested-logs.imported-<timestamp>`; delete it once the viewer shows the imported logs.
+
 ## PM2 Commands
 
 ```bash

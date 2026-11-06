@@ -1,22 +1,37 @@
-# Logtrail — Server Integration Guide (Express / Hono)
+# Logtrail — Server Integration Guide (Hono / Express)
 
-This guide explains how to integrate Logtrail into a Node.js HTTP server using the provided middleware module. It covers setup, the available middleware functions, manual logging, and what gets reported automatically.
+This guide shows how to report errors from a Hono or Express server to Logtrail using the drop-in client, `logtrail.ts`. It covers setup for both frameworks, what is reported automatically, manual logging, and how events are grouped into issues.
 
 ---
 
 ## Overview
 
-Logtrail receives structured log events via HTTP. The middleware module (`logtrail-middleware.js`) wraps this into a familiar Express-style API. Drop the file into your project, initialise it with your credentials, and mount the middleware you need.
+`logtrail.ts` is a single file with no dependencies. You copy it into your project, create a client with your credentials, and mount its middleware. From then on, every failed request (status 4xx or 5xx, or a thrown error) is sent to Logtrail as one structured event, with the error message, code, stack trace, route and request ID.
 
-Events are stored for 3 days and displayed in a live log viewer with colour-coded log levels, search, and filtering.
+In Logtrail, events appear in the log viewer under your app's name, and errors and warnings are grouped into **issues** on the dashboard: one row per distinct problem, with a count, the number of affected users, and when it was first and last seen.
+
+Events are kept for 3 days by default.
+
+The client runs on Bun, Node 22.18+ and Cloudflare Workers (with `nodejs_compat`). Sending happens in the background: it never throws, and never delays your responses.
 
 ---
 
 ## Setup
 
-### 1. Copy the middleware file
+### 1. Download the client
 
-Copy `logtrail-middleware.js` into your project's middleware directory. It has no dependencies beyond Node's built-in `crypto` module.
+Logtrail serves the current version of the file:
+
+```bash
+# TypeScript source: Bun, Node 22.18+, or any TypeScript project
+curl -o src/logtrail.ts https://<logtrail-host>/api/client/logtrail.ts
+
+# Or built JavaScript, for projects without TypeScript
+curl -o src/logtrail.js  https://<logtrail-host>/api/client/logtrail.js    # ES modules
+curl -o src/logtrail.cjs https://<logtrail-host>/api/client/logtrail.cjs   # require()
+```
+
+Re-run the command to update. The usage notes at the top of the file match this guide.
 
 ### 2. Set environment variables
 
@@ -25,227 +40,242 @@ LOGTRAIL_URL=https://<logtrail-host>
 LOGTRAIL_SECRET=<agent-secret>
 ```
 
-Ask the system administrator for the host URL and secret. The secret authenticates your server to the Logtrail ingest endpoint.
+Ask the Logtrail administrator for the host and the secret. The secret authenticates your server to the ingest endpoint; it cannot be used to log in to the Logtrail UI.
 
-### 3. Initialise
+### 3. Create the client
 
-```js
-const logtrail = require('./middleware/logtrail-middleware')({
-  url:    process.env.LOGTRAIL_URL,
-  secret: process.env.LOGTRAIL_SECRET,
-  app:    'my-api',            // stable identifier shown in Logtrail — use kebab-case
+```ts
+// logtrail-client.ts
+import { createLogtrail } from './logtrail'
+
+export const logtrail = createLogtrail({
+  url: process.env.LOGTRAIL_URL!,
+  secret: process.env.LOGTRAIL_SECRET!,
+  app: 'my-api', // how this server appears in Logtrail; keep it stable, kebab-case
+  release: process.env.GIT_SHA, // optional: the deployed version
 })
 ```
 
-The `app` value is how your server appears in the Logtrail log selector. All events from this process will be grouped under it. Use a consistent name across deployments.
+Create it once and import it wherever you log. `release` is optional, but it lets you see which deploy an issue first appeared in.
 
----
+### 4. Mount the middleware
 
-## Middleware Reference
+#### Hono
 
-### `logtrail.reqId`
+One middleware, registered before your routes:
 
-Generates a short random request ID (`res.locals.reqId`) and attaches it to every request. This ID travels with every log event for that request, allowing you to trace a single request across multiple log lines in Logtrail's search.
+```ts
+import { Hono } from 'hono'
+import { logtrail } from './logtrail-client'
 
-Mount this **first**, before all other middleware.
+const app = new Hono()
+app.use('*', logtrail.hono())
 
-```js
-app.use(logtrail.reqId)
-```
-
-### `logtrail.requests`
-
-Logs every completed response with status 400 or above, including the HTTP method, path, status code, and duration. Responses below 400 are not logged — only failures are reported.
-
-- Status 4xx → logged at `warn` level
-- Status 5xx → logged at `error` level
-
-```js
-app.use(logtrail.requests)
-```
-
-Mount this early in the stack, after `logtrail.reqId`, so it captures timing for all routes.
-
-### `logtrail.errors`
-
-A standard Express error handler (four-argument middleware). Log the error to Logtrail and then pass it unchanged to the next error handler — typically your existing one that sends the HTTP response.
-
-```js
-// Before your existing error handler
-app.use(logtrail.errors)
-
-// Your existing handler follows
-app.use(function (err, req, res, next) {
-  res.status(err.status || 500).json({ error: err.message })
+app.get('/orders/:id', async (c) => {
+  // ...
 })
 ```
 
-For 5xx errors, the stack trace is included in the event. For 4xx errors (expected failures like validation or not-found), only the message is sent.
+Errors thrown in handlers are reported with their stack trace and then handled by Hono as usual, including your `app.onError` if you have one. `HTTPException`s are reported at their own status.
 
-### `logtrail.attachProcessHandlers()`
+#### Express
 
-Catches `unhandledRejection` and `uncaughtException` at the process level — errors that bypass Express error handling entirely. Call this once at startup.
+Two middleware functions: `express()` before your routes, and `expressErrors()` after them, before your own error handler.
 
-```js
-logtrail.attachProcessHandlers()
-```
-
----
-
-## Complete Setup Example (Express)
-
-```js
-const express = require('express')
-const createError = require('http-errors')
-const logtrail = require('./middleware/logtrail-middleware')({
-  url:    process.env.LOGTRAIL_URL,
-  secret: process.env.LOGTRAIL_SECRET,
-  app:    'my-api',
-})
+```ts
+import express from 'express'
+import { logtrail } from './logtrail-client'
 
 const app = express()
-
-// Logtrail middleware — reqId and requests go at the top
-app.use(logtrail.reqId)
-app.use(logtrail.requests)
-
+app.use(logtrail.express())
 app.use(express.json())
 
 // ... your routes ...
 
-// 404 handler
-app.use((req, res, next) => next(createError(404)))
-
-// Logtrail error handler — before your own error handler
-app.use(logtrail.errors)
+app.use(logtrail.expressErrors())
 
 // Your existing error handler
 app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message })
 })
-
-// Catch anything that bypasses Express entirely
-logtrail.attachProcessHandlers()
 ```
+
+`expressErrors()` only records the error and passes it on unchanged; the event is sent once the response finishes, so each failed request produces exactly one event.
+
+### 5. Report crashes
+
+```ts
+logtrail.captureProcessErrors()
+```
+
+Call this once at startup. Uncaught exceptions and unhandled promise rejections are reported, the queue is flushed (for up to 2 seconds), and the process exits with code 1, as it would without a handler. Pass `{ exit: false }` to report without exiting.
+
+---
+
+## What Gets Reported Automatically
+
+| Situation                                | Level   | What is captured                                                   |
+| ---------------------------------------- | ------- | ------------------------------------------------------------------ |
+| 4xx response                             | `warn`  | Method, path, route pattern, status, duration, request ID, user ID |
+| 5xx response                             | `error` | The same                                                           |
+| Thrown error, 4xx                        | `warn`  | The same, plus the error message and `code`                        |
+| Thrown error, 5xx                        | `error` | The same, plus the stack trace                                     |
+| Uncaught exception / unhandled rejection | `error` | Message, code and stack trace (with `captureProcessErrors()`)      |
+
+Successful responses are not reported.
+
+### Request IDs
+
+Each request gets an ID. If the request arrives with an `x-request-id` header (from a proxy or gateway), that value is reused; otherwise a new one is generated. The ID is returned in the `x-request-id` response header, and is available to your code as `c.get('reqId')` in Hono or `res.locals.reqId` in Express.
+
+Every event sent while handling a request, including your own `logtrail.log()` calls, carries that ID automatically. Search for it in Logtrail to see everything one request did.
+
+### Users
+
+By default, the user ID is read from `c.get('user')?.id` or `c.get('userId')` in Hono, and `req.user?.id` in Express. If your auth stores the user somewhere else, pass `getUser`:
+
+```ts
+createLogtrail({
+  // ...
+  getUser: (c) => c.get('session')?.accountId, // Hono: receives the Context
+  // getUser: (req) => req.auth?.sub,           // Express: receives the request
+})
+```
+
+It is called when the event is sent, so it sees users set by auth middleware that runs after Logtrail's.
 
 ---
 
 ## Manual Logging
 
-For events that aren't errors — business events, important state changes, slow operations — use `logtrail.log()` directly from route handlers.
+For events that aren't failed requests — business events, caught errors, slow operations — call the client directly. Inside a request, the request ID and user ID are added for you.
 
-```js
-logtrail.log(level, message, metadata)
+```ts
+logtrail.log(level, message, fields?)
+logtrail.error(err, fields?)
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `level` | string | `error`, `warn`, `info`, `debug`, or `success` |
-| `message` | string | Short human-readable description |
-| `metadata` | object | Any additional fields to store with the event |
+| Parameter | Type    | Description                                                 |
+| --------- | ------- | ----------------------------------------------------------- |
+| `level`   | string  | `error`, `warn`, `info`, `debug`, or `success`              |
+| `message` | string  | Short human-readable description                            |
+| `err`     | unknown | An error you caught; its message, `code` and stack are sent |
+| `fields`  | object  | Any additional fields to store with the event               |
 
-Always include `reqId` from `res.locals` so the event can be correlated with the request that triggered it:
-
-```js
-app.post('/api/payments', async (req, res) => {
-  const result = await processPayment(req.body)
-
+```ts
+app.post('/payments', async (c) => {
+  const result = await processPayment(await c.req.json())
   logtrail.log('success', 'Payment processed', {
-    userId:    req.user.id,
-    reqId:     res.locals.reqId,
-    amount:    result.amount,
-    currency:  result.currency,
+    amount: result.amount,
+    currency: result.currency,
     paymentId: result.id,
   })
-
-  res.json(result)
+  return c.json(result)
 })
 ```
 
-```js
-app.post('/api/auth/login', async (req, res) => {
-  const valid = await checkCredentials(req.body)
+```ts
+try {
+  await syncInventory()
+} catch (err) {
+  // Handled here, so no failed request will report it
+  logtrail.error(err, { warehouse: 'east' })
+}
+```
 
-  if (!valid) {
-    logtrail.log('warn', 'Failed login attempt', {
-      reqId: res.locals.reqId,
-      ip:    req.ip,
-    })
-    return res.status(401).json({ error: 'Invalid credentials' })
-  }
+Fields without a dedicated meaning are stored as-is and shown in the event details.
 
-  res.json({ token: generateToken() })
+---
+
+## Issues and Error Codes
+
+Errors and warnings are grouped into issues by:
+
+- the app,
+- the method and route pattern (`GET /orders/:id`, not `/orders/123`),
+- the HTTP status,
+- the error `code` if there is one, otherwise the message with numbers and IDs removed,
+- the first stack frame in your own code (line numbers ignored, so a deploy doesn't split an issue).
+
+So `Order 123 not found` and `Order 456 not found` on the same route are one issue. To control grouping explicitly, give your errors a `code`:
+
+```ts
+const err = new HTTPException(404, { message: `Order ${id} not found` })
+throw Object.assign(err, { code: 'ORDER_NOT_FOUND' })
+```
+
+Use stable, uppercase codes. Messages change over time; codes are what you search and count by.
+
+---
+
+## Options
+
+| Option            | Default   | Description                                                                                                           |
+| ----------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `url`             | required  | Logtrail base URL                                                                                                     |
+| `secret`          | required  | Agent secret                                                                                                          |
+| `app`             | required  | App name shown in Logtrail                                                                                            |
+| `release`         | —         | Version or commit of the running code                                                                                 |
+| `getUser`         | see above | Returns the current user's ID                                                                                         |
+| `skip`            | —         | `(info) => boolean`; return true to not report a request. `info` has `method`, `path`, `route`, `status` and `error`. |
+| `batchSize`       | 50        | Events per request to Logtrail                                                                                        |
+| `flushIntervalMs` | 2000      | Longest wait before sending a partial batch                                                                           |
+| `maxQueue`        | 1000      | Events held while Logtrail is unreachable                                                                             |
+| `enabled`         | true      | Set `false` to make the client a no-op, e.g. in tests                                                                 |
+
+Skipping noisy requests:
+
+```ts
+createLogtrail({
+  // ...
+  skip: ({ path, status }) => path === '/health' || (status === 404 && path.startsWith('/wp-')),
 })
 ```
 
 ---
 
-## What Gets Logged Automatically
+## Delivery
 
-With the three middleware functions mounted, you get the following without any additional code:
+Events are queued and sent in batches: when 50 are waiting, or 2 seconds after the first one. If Logtrail can't be reached or answers with a 5xx, the batch is kept and retried; if the queue fills during a long outage, the oldest events are dropped. If Logtrail rejects a batch (a wrong secret, for example), it is dropped and a single warning is printed — the client never logs more than one warning per kind of failure.
 
-| Situation | Level | What is captured |
-|-----------|-------|-----------------|
-| 4xx response | `warn` | Method, path, status, duration, reqId, userId |
-| 5xx response | `error` | Method, path, status, duration, reqId, userId |
-| Error reaches error handler | `error` / `warn` | All of the above plus error message, error code, and stack trace (5xx only) |
-| Unhandled promise rejection | `error` | Message and stack trace |
-| Uncaught exception | `error` | Message and stack trace |
+Pending events are sent automatically when the process exits normally. For an explicit shutdown, flush first:
+
+```ts
+process.on('SIGTERM', async () => {
+  await logtrail.flush()
+  process.exit(0)
+})
+```
 
 ---
 
-## Error Codes
+## Moving from logtrail-middleware.js
 
-If your errors carry a `code` property (e.g. `http-errors` or custom error classes), Logtrail stores it as a distinct field and displays it alongside the message. This makes it easy to search for and count specific error types across the 3-day window.
+`logtrail-middleware.js` is replaced by `logtrail.ts`. Logtrail still accepts events from the old file, so you can switch at any time.
 
-```js
-const err = new Error('Resource not found')
-err.status = 404
-err.code = 'RESOURCE_NOT_FOUND'
-next(err)
-// Logged as: { level: 'warn', code: 'RESOURCE_NOT_FOUND', msg: 'GET /api/items/99 404 - Resource not found', ... }
-```
+| Old                                                      | New                                                   |
+| -------------------------------------------------------- | ----------------------------------------------------- |
+| `require('./logtrail-middleware')({ url, secret, app })` | `createLogtrail({ url, secret, app })`                |
+| `app.use(logtrail.reqId)` + `app.use(logtrail.requests)` | `app.use(logtrail.express())`                         |
+| `app.use(logtrail.errors)`                               | `app.use(logtrail.expressErrors())`                   |
+| `logtrail.attachProcessHandlers()`                       | `logtrail.captureProcessErrors()`                     |
+| `logtrail.log(level, msg, { reqId: res.locals.reqId })`  | `logtrail.log(level, msg)` — `reqId` is added for you |
 
-Use stable, uppercase codes. Error messages change over time; codes are what you search and count by.
-
----
-
-## Hono
-
-The middleware uses the Express convention (`(req, res, next)` and `res.locals`), so it does not work directly with Hono's context model. For a Hono app, call `logtrail.log()` and `logtrail.send()` directly from your route handlers and middleware rather than mounting the Express-style helpers.
-
-```js
-// Hono equivalent of the reqId middleware
-app.use(async (c, next) => {
-  c.set('reqId', randomBytes(4).toString('hex'))
-  await next()
-})
-
-// Hono equivalent of the error middleware
-app.onError((err, c) => {
-  const status = err.status || 500
-  logtrail.log(status >= 500 ? 'error' : 'warn', `${c.req.method} ${c.req.path} ${status} - ${err.message}`, {
-    method:  c.req.method,
-    path:    c.req.path,
-    status,
-    reqId:   c.get('reqId'),
-    stack:   status >= 500 ? err.stack : undefined,
-  })
-  return c.json({ error: err.message }, status)
-})
-```
+Differences to expect: an error that reaches the error handler is now one event rather than two; events carry the route pattern, so they group into issues; and `captureProcessErrors()` exits the process after a crash instead of keeping it running.
 
 ---
 
 ## Guidelines
 
 **Do log:**
+
 - Business-significant failures: payment declined, auth failure, quota exceeded
 - Slow operations that indicate degradation
-- Any error that reaches the error handler
+- Errors you catch and handle, with `logtrail.error()`
 - State changes that are hard to reconstruct later (user deleted, account suspended)
 
 **Do not log:**
+
 - Successful routine requests (too much volume, no signal)
 - Sensitive data: passwords, tokens, payment card numbers, personal information
-- High-frequency health check or ping endpoints (these create noise and inflate counts)
+- High-frequency health check or ping endpoints (use `skip`)

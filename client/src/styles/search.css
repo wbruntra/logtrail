@@ -36,7 +36,7 @@
 }
 
 /* Dark theme adjustments */
-[data-bs-theme="dark"] .search-highlight {
+[data-bs-theme='dark'] .search-highlight {
   background-color: #ff9800;
   color: #000;
 }

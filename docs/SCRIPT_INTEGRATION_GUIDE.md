@@ -6,9 +6,9 @@ This guide explains how to send error reports and run summaries from a server-si
 
 ## Overview
 
-Logtrail receives log events via a simple HTTP endpoint. Events are stored for 3 days and displayed in a live log viewer with filtering, search, and colour-coded log levels.
+Logtrail receives log events via a simple HTTP endpoint. Events are kept for 3 days by default and displayed in a live log viewer with filtering, search, and colour-coded log levels. Errors and warnings are also grouped into issues on the dashboard.
 
-Scripts integrate by sending JSON events to the ingest endpoint — typically at the start of a run, after each significant action, and on completion or failure. No SDK or library is required; a plain `fetch` call is sufficient.
+Scripts integrate by sending JSON events to the ingest endpoint — typically at the start of a run, after each significant action, and on completion or failure. No library is required; a plain `fetch` call is sufficient. For Bun or Node scripts, the drop-in client described in [Using the client](#using-the-client-bun--node) handles batching and retries for you.
 
 ---
 
@@ -30,37 +30,42 @@ Every event is a JSON object. Two fields are required; everything else is option
 
 ```json
 {
-  "app":      "oauth-task-worker",
-  "level":    "error",
-  "msg":      "Human-readable description of what happened",
+  "app": "oauth-task-worker",
+  "level": "error",
+  "msg": "Human-readable description of what happened",
 
-  "code":     "AUTH_ERROR",
+  "code": "AUTH_ERROR",
   "duration": 47341,
-  "stack":    "Error: ...\n  at ...",
+  "stack": "Error: ...\n  at ...",
 
-  "tokenId":  12345,
+  "tokenId": 12345,
   "platform": "instagram"
 }
 ```
 
 ### Required fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `app` | string | Identifier for the script or service. Use a stable name like `oauth-task-worker`. All events from the same script should use the same value. |
-| `level` | string | Severity. One of: `error`, `warn`, `info`, `debug`, `success`. |
-| `msg` | string | A short human-readable description. This is the primary text shown in the log viewer. |
+| Field   | Type   | Description                                                                                                                                  |
+| ------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app`   | string | Identifier for the script or service. Use a stable name like `oauth-task-worker`. All events from the same script should use the same value. |
+| `level` | string | Severity. One of: `error`, `warn`, `info`, `debug`, `success`.                                                                               |
+| `msg`   | string | A short human-readable description. This is the primary text shown in the log viewer.                                                        |
 
 ### Standard optional fields
 
 These are recognised by Logtrail and displayed distinctly in the UI:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `code` | string | A stable short code identifying the error type. Examples: `AUTH_ERROR`, `RATE_LIMIT`, `DB_TIMEOUT`. Use the same code consistently across runs so errors can be grouped and counted. |
-| `duration` | number | How long the operation took, in milliseconds. |
-| `stack` | string | Full stack trace. Include for `error` level events; omit for everything else. |
-| `userId` | string/number | If the operation relates to a user or account, include their ID. |
+| Field      | Type          | Description                                                                                                                                                                          |
+| ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `code`     | string        | A stable short code identifying the error type. Examples: `AUTH_ERROR`, `RATE_LIMIT`, `DB_TIMEOUT`. Use the same code consistently across runs so errors can be grouped and counted. |
+| `duration` | number        | How long the operation took, in milliseconds.                                                                                                                                        |
+| `stack`    | string        | Full stack trace. Include for `error` level events; omit for everything else.                                                                                                        |
+| `userId`   | string/number | If the operation relates to a user or account, include their ID.                                                                                                                     |
+| `ts`       | string        | When the event happened, as an ISO 8601 timestamp. Defaults to when Logtrail received it. A value more than a day old or 5 minutes in the future is replaced with the receipt time.  |
+| `reqId`    | string        | A request or run ID, to find every event for one operation.                                                                                                                          |
+| `release`  | string        | The version of the script that is running.                                                                                                                                           |
+
+`method`, `path`, `route`, `status` and `duration` are also recognised; they matter mostly for HTTP servers (see the [Server Integration Guide](SERVER_INTEGRATION_GUIDE.md)).
 
 ### Custom fields
 
@@ -68,15 +73,15 @@ Any additional fields are stored alongside the event and searchable in Logtrail.
 
 ```json
 {
-  "app":         "oauth-task-worker",
-  "level":       "error",
-  "msg":         "Token refresh failed — non-recoverable",
-  "code":        "AUTH_ERROR",
-  "tokenId":     12345,
-  "platform":    "instagram",
+  "app": "oauth-task-worker",
+  "level": "error",
+  "msg": "Token refresh failed — non-recoverable",
+  "code": "AUTH_ERROR",
+  "tokenId": 12345,
+  "platform": "instagram",
   "recoverable": false,
-  "userAction":  "REAUTH_REQUIRED",
-  "step":        "token_exchange"
+  "userAction": "REAUTH_REQUIRED",
+  "step": "token_exchange"
 }
 ```
 
@@ -88,13 +93,13 @@ All fields are stored as-is. Avoid including secrets, tokens, or passwords in an
 
 Choose the level based on what the event means operationally:
 
-| Level | When to use |
-|-------|-------------|
-| `error` | Something failed that shouldn't have: a task error, a timeout, an unexpected exception. |
-| `warn` | Something unusual happened but execution continued: a fallback was used, a retry is scheduled, input was unexpected. |
-| `info` | Normal milestones: run started, run completed, batch summary. |
-| `success` | A task or run completed successfully (optional — `info` is fine too). |
-| `debug` | Verbose detail useful during development. Can be left in code but filtered out of normal monitoring. |
+| Level     | When to use                                                                                                          |
+| --------- | -------------------------------------------------------------------------------------------------------------------- |
+| `error`   | Something failed that shouldn't have: a task error, a timeout, an unexpected exception.                              |
+| `warn`    | Something unusual happened but execution continued: a fallback was used, a retry is scheduled, input was unexpected. |
+| `info`    | Normal milestones: run started, run completed, batch summary.                                                        |
+| `success` | A task or run completed successfully (optional — `info` is fine too).                                                |
+| `debug`   | Verbose detail useful during development. Can be left in code but filtered out of normal monitoring.                 |
 
 ---
 
@@ -109,7 +114,7 @@ async function sendLog(event) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer <agent-secret>',
+        Authorization: 'Bearer <agent-secret>',
       },
       body: JSON.stringify(event),
     })
@@ -120,6 +125,67 @@ async function sendLog(event) {
 ```
 
 Always fire-and-forget or use a short timeout. Logtrail should never be in the critical path of a script.
+
+### Sending several events at once
+
+To send a batch, put the events in an `events` array (up to 500) and give `app` once:
+
+```json
+{
+  "app": "oauth-task-worker",
+  "events": [
+    { "level": "error", "msg": "Token refresh failed", "code": "AUTH_ERROR", "tokenId": 12345 },
+    { "level": "info", "msg": "Run complete: processed 40, failed 1", "code": "RUN_COMPLETE" }
+  ]
+}
+```
+
+Valid events are stored even if others in the batch are not. The response says how many were stored and why any were rejected:
+
+```json
+{
+  "ok": true,
+  "written": 1,
+  "rejected": [
+    {
+      "index": 1,
+      "error": "level: Invalid option: expected one of \"error\"|\"warn\"|\"info\"|\"debug\"|\"success\""
+    }
+  ]
+}
+```
+
+A single event that fails validation, or a batch with no valid events, gets a `400` with an `error` message.
+
+### Using the client (Bun / Node)
+
+The drop-in client used by servers works in scripts too, and batches, retries and attaches timestamps for you:
+
+```bash
+curl -o logtrail.ts https://<logtrail-host>/api/client/logtrail.ts
+```
+
+```ts
+import { createLogtrail } from './logtrail'
+
+const logtrail = createLogtrail({
+  url: process.env.LOGTRAIL_URL!,
+  secret: process.env.LOGTRAIL_SECRET!,
+  app: 'oauth-task-worker',
+})
+logtrail.captureProcessErrors() // report a crash, then exit with code 1
+
+logtrail.log('info', 'Run started')
+try {
+  await processTask(task)
+} catch (err) {
+  logtrail.error(err, { tokenId: task.tokenId })
+}
+
+await logtrail.flush() // before the script exits
+```
+
+See the [Server Integration Guide](SERVER_INTEGRATION_GUIDE.md) for the full API. The patterns below apply either way.
 
 ---
 
@@ -210,13 +276,13 @@ main().catch(async (error) => {
 
 Based on the script structure, the following events cover the most useful monitoring surface area:
 
-| Event | Level | When | Key fields |
-|-------|-------|------|------------|
-| Run complete | `info` | End of `runBatch()`, always | `processed`, `failed`, `remaining`, `duration` |
-| No tasks found | `info` | When `runUpdateAccount` returns `no_tasks` | — |
-| Task failed (standardised) | `error` | After `processStandardizedError` | `code`, `subCode`, `step`, `recoverable`, `userAction`, `tokenId`, `platform` |
-| Task failed (legacy) | `warn` | After `processLegacyError` | `error`, `tokenId` |
-| Timeout | `warn` | When `withTimeout` rejects | `code: 'TIMEOUT'`, `tokenId`, which operation timed out |
-| Fatal crash | `error` | `main().catch(...)` | `stack` |
+| Event                      | Level   | When                                       | Key fields                                                                    |
+| -------------------------- | ------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
+| Run complete               | `info`  | End of `runBatch()`, always                | `processed`, `failed`, `remaining`, `duration`                                |
+| No tasks found             | `info`  | When `runUpdateAccount` returns `no_tasks` | —                                                                             |
+| Task failed (standardised) | `error` | After `processStandardizedError`           | `code`, `subCode`, `step`, `recoverable`, `userAction`, `tokenId`, `platform` |
+| Task failed (legacy)       | `warn`  | After `processLegacyError`                 | `error`, `tokenId`                                                            |
+| Timeout                    | `warn`  | When `withTimeout` rejects                 | `code: 'TIMEOUT'`, `tokenId`, which operation timed out                       |
+| Fatal crash                | `error` | `main().catch(...)`                        | `stack`                                                                       |
 
 The run summary is the single most valuable event — it provides a heartbeat and a quick count of outcomes without requiring detailed analysis of per-task events.

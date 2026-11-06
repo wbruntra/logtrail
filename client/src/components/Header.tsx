@@ -14,9 +14,6 @@ interface HeaderProps {
   onClearSearch?: () => void
   isSearching?: boolean
   matchCount?: number
-  totalCount?: number
-  onBackendSearch?: (query: string) => Promise<void>
-  backendSearchLoading?: boolean
   // Optional extra controls rendered after the nav (e.g. time range picker)
   controls?: React.ReactNode
 }
@@ -33,9 +30,6 @@ const Header: React.FC<HeaderProps> = ({
   onClearSearch,
   isSearching = false,
   matchCount = 0,
-  totalCount = 0,
-  onBackendSearch,
-  backendSearchLoading = false,
   controls,
 }) => {
   const { logout } = useUser()
@@ -55,7 +49,7 @@ const Header: React.FC<HeaderProps> = ({
     }
   }
 
-  const showLogControls = logFiles && onLogChange && onSearchChange && onClearSearch && onBackendSearch
+  const showLogControls = logFiles && onLogChange && onSearchChange && onClearSearch
 
   return (
     <header className="App-header">
@@ -65,8 +59,12 @@ const Header: React.FC<HeaderProps> = ({
           <h1 className="display-5 mb-0">Logtrail</h1>
           <div className="d-flex align-items-center gap-3">
             <nav className="d-flex gap-2">
-              <NavLink to="/logs" className={navLinkClass}>Logs</NavLink>
-              <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>
+              <NavLink to="/logs" className={navLinkClass}>
+                Logs
+              </NavLink>
+              <NavLink to="/dashboard" className={navLinkClass}>
+                Dashboard
+              </NavLink>
             </nav>
             {controls}
             <button className="btn btn-outline-light" onClick={handleLogout} type="button">
@@ -101,9 +99,6 @@ const Header: React.FC<HeaderProps> = ({
               onClearSearch={onClearSearch}
               isSearching={isSearching}
               matchCount={matchCount}
-              totalCount={totalCount}
-              onBackendSearch={onBackendSearch}
-              backendSearchLoading={backendSearchLoading}
             />
           </>
         )}

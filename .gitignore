@@ -42,8 +42,13 @@ ecosystem.config.js.local
 pm2.json
 .env
 ecosystem.config.js
-ecosystem.config.cjs
 
-agent/*.yaml
 
 ingested-logs/*
+ingested-logs.imported-*/
+data/*
+data/raw-logs/*
+
+# Local secrets bundle pushed by ansible/deploy.yml
+ansible/files/*/
+agent/agent.config.yaml

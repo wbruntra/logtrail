@@ -11,11 +11,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   padding: 0;
 }
-
-
 
 .App {
   min-height: 100vh;
@@ -32,7 +30,7 @@
   padding: 2rem 0 1rem 0;
   background: #343a40;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
 }
 
 .main-content {
@@ -44,13 +42,40 @@
   background: transparent;
 }
 
+.view-mode-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 1.25rem;
+  background: rgba(91, 192, 222, 0.08);
+  border-bottom: 1px solid rgba(91, 192, 222, 0.2);
+  font-size: 0.85rem;
+  color: #5bc0de;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.view-mode-banner-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-mode-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .log-container {
   flex: 1 1 auto;
   width: 100%;
   background: var(--bs-tertiary-bg, #23272b);
   color: var(--bs-body-color, #f8f9fa);
   border-radius: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
   padding: 1.5rem;
   font-family: monospace;
   font-size: 1rem;

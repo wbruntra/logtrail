@@ -1,0 +1,10 @@
+---
+# logtrail2.lunaparkdigital.com on gaybor_new, nginx -> localhost:11411.
+# The logtrail-agent pm2 process runs from the same checkout (agent/).
+project_root: /home/william/logtrail
+target_branch: master
+pm2_name: logtrail-central
+pm2_node_version: v24.12.0
+# Must match PORT in ecosystem.config.cjs and the nginx proxy_pass.
+app_port: 11411
+public_url: https://logtrail2.lunaparkdigital.com
