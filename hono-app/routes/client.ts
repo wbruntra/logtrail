@@ -46,6 +46,11 @@ router.get('/logtrail.ts', async (c) => {
   return c.body(await Bun.file(SOURCE).text())
 })
 
+router.get('/agent.ts', async (c) => {
+  c.header('Content-Type', 'text/plain; charset=utf-8')
+  return c.body(await Bun.file(path.join(import.meta.dir, '../../agent/logtrail-agent.ts')).text())
+})
+
 router.get('/logtrail.js', async (c) => {
   c.header('Content-Type', 'text/javascript; charset=utf-8')
   return c.body(await cached('esm'))

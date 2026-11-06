@@ -111,9 +111,32 @@ describe('POST /api/ingest', () => {
     ])
   })
 
-  it('rejects unstructured lines and level-less messages', async () => {
-    expect((await post({ app: 'a', lines: ['one'] })).status).toBe(400)
+  it('parses raw log lines into events tagged with app, service, env and file', async () => {
+    const res = await post({
+      app: 'talent-sales',
+      service: 'api',
+      env: 'staging',
+      file: 'api.log',
+      lines: ['GET /orders/7 500 9 ms - 3', '  ', 'started'],
+    })
+    expect(await res.json()).toEqual({ ok: true, written: 2 })
+    const [failed, started] = await rows()
+    expect(failed).toMatchObject({
+      app: 'talent-sales',
+      service: 'api',
+      env: 'staging',
+      level: 'error',
+      status: 500,
+      path: '/orders/7',
+    })
+    expect(failed.fingerprint).toHaveLength(16)
+    expect(JSON.parse(failed.extra!)).toEqual({ source: 'file', file: 'api.log' })
+    expect(started).toMatchObject({ level: 'info', msg: 'started' })
+  })
+
+  it('rejects a bare message and empty lines', async () => {
     expect((await post({ app: 'a', msg: 'one' })).status).toBe(400)
+    expect((await post({ app: 'a', lines: ['  '] })).status).toBe(400)
     expect(await rows()).toEqual([])
   })
 

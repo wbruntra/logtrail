@@ -1,0 +1,19 @@
+# logtrail agent configuration. Copy to agent.config.yaml (not committed) on the machine
+# that holds the log files. The secret comes from LOGTRAIL_SECRET, or agent_secret here.
+
+central_url: 'https://logtrail2.example.com'
+
+# Defaults for every file below
+app: talent-sales # the product or codebase; shared by all its processes
+env: production
+
+files:
+  # Each file says which service of the app it belongs to
+  - path: /home/you/logs/talent-backend.log
+    service: talent-backend
+  - path: /home/you/logs/story-worker.log
+    service: story-refresh-worker
+  # Any default can be overridden per file
+  - path: /home/you/logs/athios.log
+    app: athios
+    service: athios-api

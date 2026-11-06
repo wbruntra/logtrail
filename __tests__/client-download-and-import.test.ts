@@ -32,7 +32,10 @@ describe('SDK download', () => {
     const text = await res.text()
     expect(text).toStartWith('# Connect this project to logtrail')
     expect(text).toContain('http://logs.example.com/api/client/logtrail.ts')
+    expect(text).toContain('/api/client/agent.ts')
     expect(text).not.toContain(secrets.agentSecret)
+    const agent = await app.request('/api/client/agent.ts')
+    expect(await agent.text()).toStartWith('#!/usr/bin/env bun')
   })
 
   it('serves ESM and CommonJS builds that work', async () => {

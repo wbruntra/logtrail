@@ -88,9 +88,33 @@ Only 4xx/5xx responses are recorded by default. Set \`logRequests: true\` to als
 
 Elsewhere in the code, \`logtrail.log('info', 'message', { extra })\` and \`logtrail.error(err, { extra })\` send events with the current request's id attached.
 
-## 5. Clean up
+## 5. Or ship a log file instead
 
-If this project ships its log files with a logtrail agent (\`logtrail-agent\`, a pm2 entry, an agent config), remove it. Logtrail no longer accepts raw log lines, so the agent's requests are rejected.
+For output the client can't see (morgan, pino, pm2 logs, cron scripts), or a project you
+don't want to change, run the logtrail agent on the machine holding the files. It tails each
+file and tags every line with the app, service and env you give it; logtrail parses the lines
+into events (JSON loggers, morgan access lines and plain text are recognised). Use it
+instead of the client for the same process, or the same events arrive twice.
+
+\`\`\`sh
+curl -o logtrail-agent.ts ${baseUrl}/api/client/agent.ts
+\`\`\`
+
+\`\`\`yaml
+# agent.config.yaml
+central_url: '${baseUrl}'
+app: my-product
+env: production
+files:
+  - path: /var/log/my-product/api.log
+    service: api
+  - path: /var/log/my-product/worker.log
+    service: worker
+\`\`\`
+
+Run \`LOGTRAIL_SECRET=... bun logtrail-agent.ts --config agent.config.yaml\` (under pm2 for
+production). It needs \`tail-stream\` (\`bun add tail-stream\`). The secret is read from the
+environment, not the file.
 
 ## 6. Verify
 

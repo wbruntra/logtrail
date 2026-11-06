@@ -51,3 +51,4 @@ data/raw-logs/*
 
 # Local secrets bundle pushed by ansible/deploy.yml
 ansible/files/*/
+agent/agent.config.yaml

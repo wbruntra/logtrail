@@ -1,10 +1,12 @@
 import { LEVELS } from '@database/schema'
 import { z } from 'zod'
+import { parseLines } from './line-parser'
 import { type Source, resolveSource } from './source'
 
 // The ingest contract: what sdk/logtrail.ts (and older clients) send to POST /api/ingest.
 
 const MAX_BATCH = 500
+const MAX_LINE = 8000
 
 const clip = (max: number) => (s: string) => (s.length > max ? s.slice(0, max) : s)
 const text = (max: number) => z.string().transform(clip(max)).nullish()
@@ -63,8 +65,9 @@ function describe(error: z.ZodError): string {
  * Accepts, in order of preference:
  *   { app, service?, env?, events: [...] }  batch of structured events (sdk/logtrail.ts)
  *   { app, level, msg, ...fields }    single structured event (logtrail-middleware.js)
- * Unstructured payloads ({ app, lines } or { app, msg } without a level) are rejected:
- * apps send structured events, there is no log-file shipping.
+ *   { app, service?, env?, file?, lines: string[] }  raw lines from a log file (the agent),
+ *                                    parsed into events by ./line-parser
+ * A bare { app, msg } without a level is rejected.
  */
 export function parseIngestPayload(body: unknown): IngestPayload {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -75,6 +78,8 @@ export function parseIngestPayload(body: unknown): IngestPayload {
     service: rawService,
     env: rawEnv,
     events,
+    lines,
+    file,
     ...rest
   } = body as Record<string, unknown>
 
@@ -104,6 +109,21 @@ export function parseIngestPayload(body: unknown): IngestPayload {
     return { kind: 'events', source, events: valid, rejected }
   }
 
+  if (Array.isArray(lines)) {
+    const strings = lines.filter((l): l is string => typeof l === 'string').map(clip(MAX_LINE))
+    const fileName = typeof file === 'string' ? clip(200)(file) : undefined
+    const parsed = parseLines(strings)
+    if (!parsed.length) return { kind: 'invalid', error: 'No valid lines provided' }
+    const valid: IngestEvent[] = []
+    const rejected: RejectedEvent[] = []
+    parsed.slice(0, MAX_BATCH).forEach((e, index) => {
+      const result = eventSchema.safeParse({ ...e, source: 'file', file: fileName })
+      if (result.success) valid.push(result.data)
+      else rejected.push({ index, error: describe(result.error) })
+    })
+    return { kind: 'events', source, events: valid, rejected }
+  }
+
   const level = typeof rest.level === 'string' ? rest.level.toLowerCase() : null
   if (level && (LEVELS as readonly string[]).includes(level)) {
     const parsed = eventSchema.safeParse(rest)
@@ -114,6 +134,6 @@ export function parseIngestPayload(body: unknown): IngestPayload {
   return {
     kind: 'invalid',
     error:
-      'Send structured events: { app, events: [{ level, msg, ... }] }. Unstructured lines are no longer accepted; use sdk/logtrail.ts.',
+      'Send structured events: { app, events: [{ level, msg, ... }] }. Raw log lines go in { app, lines: [...] }; apps use sdk/logtrail.ts.',
   }
 }
