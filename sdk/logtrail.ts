@@ -5,7 +5,9 @@
  * Node 22.18+ (native type stripping) and Workers with nodejs_compat.
  *
  *   import { createLogtrail } from './logtrail'
- *   const logtrail = createLogtrail({ url, secret, app: 'my-api', release: GIT_SHA })
+ *   const logtrail = createLogtrail({
+ *     url, secret, app: 'my-product', service: 'api', env: process.env.NODE_ENV, release: GIT_SHA,
+ *   })
  *
  * Hono — one middleware, registered before your routes:
  *   app.use('*', logtrail.hono())
@@ -69,8 +71,12 @@ export interface LogtrailOptions {
   url: string
   /** The agent secret configured on logtrail */
   secret: string
-  /** Name this app appears under in logtrail */
+  /** The product or codebase, e.g. 'talent-sales'. Every process of it uses the same app. */
   app: string
+  /** This process within the app, e.g. 'api' or 'story-worker' (default: the app name) */
+  service?: string
+  /** Deployment environment (default: production) */
+  env?: string
   /** Version or commit of the running code */
   release?: string
   /** Current user's id. Receives the Hono Context or the Express request. */
@@ -203,6 +209,8 @@ export function createLogtrail(options: LogtrailOptions) {
     url,
     secret,
     app,
+    service,
+    env,
     release,
     getUser = defaultGetUser,
     skip,
@@ -266,7 +274,7 @@ export function createLogtrail(options: LogtrailOptions) {
       const res = await send(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ app, events }),
+        body: JSON.stringify({ app, service, env, events }),
         signal: AbortSignal.timeout?.(SEND_TIMEOUT_MS),
       })
       const body = await res.text().catch(() => '')

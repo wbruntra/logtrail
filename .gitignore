@@ -43,7 +43,6 @@ pm2.json
 .env
 ecosystem.config.js
 
-agent/*.yaml
 
 ingested-logs/*
 ingested-logs.imported-*/

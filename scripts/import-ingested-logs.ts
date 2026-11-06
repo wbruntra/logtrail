@@ -16,6 +16,7 @@ import { migrateToLatest } from '@database/migrate'
 import type { NewEventRow } from '@database/schema'
 import { eventSchema } from '@/services/event-schema'
 import { toRow } from '@/services/event-store'
+import { DEFAULT_ENV } from '@/services/source'
 import { retentionCutoff } from '@/services/retention'
 
 const BATCH = 500
@@ -34,7 +35,15 @@ export function parseLine(app: string, line: string): NewEventRow | null {
   const ms = space > 0 ? Date.parse(line.slice(0, space)) : NaN
   if (Number.isNaN(ms)) return null
   const ts = new Date(ms).toISOString()
-  return { app, ts, received_at: ts, level: null, msg: line.slice(space + 1) }
+  return {
+    app,
+    service: app,
+    env: DEFAULT_ENV,
+    ts,
+    received_at: ts,
+    level: null,
+    msg: line.slice(space + 1),
+  }
 }
 
 const key = (row: { ts: string; msg: string }) => `${row.ts}\0${row.msg}`

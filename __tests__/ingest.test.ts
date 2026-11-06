@@ -51,7 +51,9 @@ describe('POST /api/ingest', () => {
 
     const [error, info] = await rows()
     expect(error).toMatchObject({
-      app: 'shop_api',
+      app: 'shop-api',
+      service: 'shop-api',
+      env: 'production',
       ts,
       level: 'error',
       code: 'ORDER_NOT_FOUND',
@@ -94,15 +96,25 @@ describe('POST /api/ingest', () => {
     expect((await rows())[0]).toMatchObject({ level: 'error', msg: 'boom', status: 500 })
   })
 
-  it('stores agent lines with no level', async () => {
-    await post({ app: 'agent', lines: ['one', '  ', 'two'] })
-    await post({ app: 'agent', msg: 'three' })
-    const stored = await rows()
-    expect(stored.map((r) => [r.level, r.msg])).toEqual([
-      [null, 'one'],
-      [null, 'two'],
-      [null, 'three'],
+  it('folds old per-process names into their app and records service and env', async () => {
+    await post({ app: 'redesign_api', events: [{ level: 'info', msg: 'a' }] })
+    await post({ app: 'talent-backend', env: 'Staging', events: [{ level: 'info', msg: 'b' }] })
+    await post({
+      app: 'talent-sales',
+      service: 'Story Worker',
+      events: [{ level: 'info', msg: 'c' }],
+    })
+    expect((await rows()).map((r) => [r.app, r.service, r.env])).toEqual([
+      ['talent-sales', 'talent-backend', 'production'],
+      ['talent-sales', 'talent-backend', 'staging'],
+      ['talent-sales', 'story-worker', 'production'],
     ])
+  })
+
+  it('rejects unstructured lines and level-less messages', async () => {
+    expect((await post({ app: 'a', lines: ['one'] })).status).toBe(400)
+    expect((await post({ app: 'a', msg: 'one' })).status).toBe(400)
+    expect(await rows()).toEqual([])
   })
 
   it('rejects payloads without app or content', async () => {

@@ -33,7 +33,7 @@ async function ingest(baseUrl: string, appName: string, lines: string[]) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${secrets.agentSecret}`,
     },
-    body: JSON.stringify({ app: appName, lines }),
+    body: JSON.stringify({ app: appName, events: lines.map((msg) => ({ level: 'info', msg })) }),
   })
 
   if (!res.ok) {

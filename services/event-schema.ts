@@ -1,10 +1,10 @@
 import { LEVELS } from '@database/schema'
 import { z } from 'zod'
+import { type Source, resolveSource } from './source'
 
 // The ingest contract: what sdk/logtrail.ts (and older clients) send to POST /api/ingest.
 
 const MAX_BATCH = 500
-const MAX_LINE = 8000
 
 const clip = (max: number) => (s: string) => (s.length > max ? s.slice(0, max) : s)
 const text = (max: number) => z.string().transform(clip(max)).nullish()
@@ -50,8 +50,7 @@ export interface RejectedEvent {
 }
 
 export type IngestPayload =
-  | { kind: 'events'; app: string; events: IngestEvent[]; rejected: RejectedEvent[] }
-  | { kind: 'lines'; app: string; lines: string[] }
+  | { kind: 'events'; source: Source; events: IngestEvent[]; rejected: RejectedEvent[] }
   | { kind: 'invalid'; error: string }
 
 function describe(error: z.ZodError): string {
@@ -62,19 +61,33 @@ function describe(error: z.ZodError): string {
 
 /**
  * Accepts, in order of preference:
- *   { app, events: [...] }            batch of structured events (sdk/logtrail.ts)
+ *   { app, service?, env?, events: [...] }  batch of structured events (sdk/logtrail.ts)
  *   { app, level, msg, ...fields }    single structured event (logtrail-middleware.js)
- *   { app, lines: string[] }          unstructured lines (agent)
- *   { app, msg }                      single unstructured line
+ * Unstructured payloads ({ app, lines } or { app, msg } without a level) are rejected:
+ * apps send structured events, there is no log-file shipping.
  */
 export function parseIngestPayload(body: unknown): IngestPayload {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return { kind: 'invalid', error: 'Body must be a JSON object' }
   }
-  const { app: rawApp, events, lines, ...rest } = body as Record<string, unknown>
+  const {
+    app: rawApp,
+    service: rawService,
+    env: rawEnv,
+    events,
+    ...rest
+  } = body as Record<string, unknown>
 
   const app = appName.safeParse(rawApp)
   if (!app.success) return { kind: 'invalid', error: 'app field is required' }
+
+  const optional = z.string().trim().max(100).nullish()
+  const service = optional.safeParse(rawService)
+  const env = optional.safeParse(rawEnv)
+  if (!service.success || !env.success) {
+    return { kind: 'invalid', error: 'service and env must be strings' }
+  }
+  const source = resolveSource(app.data, service.data, env.data)
 
   if (Array.isArray(events)) {
     if (!events.length) return { kind: 'invalid', error: 'events must not be empty' }
@@ -88,30 +101,19 @@ export function parseIngestPayload(body: unknown): IngestPayload {
       if (parsed.success) valid.push(parsed.data)
       else rejected.push({ index, error: describe(parsed.error) })
     })
-    return { kind: 'events', app: app.data, events: valid, rejected }
-  }
-
-  if (Array.isArray(lines)) {
-    const valid = lines
-      .filter((l): l is string => typeof l === 'string' && l.trim() !== '')
-      .map(clip(MAX_LINE))
-    if (!valid.length) return { kind: 'invalid', error: 'No valid lines provided' }
-    return { kind: 'lines', app: app.data, lines: valid }
+    return { kind: 'events', source, events: valid, rejected }
   }
 
   const level = typeof rest.level === 'string' ? rest.level.toLowerCase() : null
   if (level && (LEVELS as readonly string[]).includes(level)) {
     const parsed = eventSchema.safeParse(rest)
     if (!parsed.success) return { kind: 'invalid', error: describe(parsed.error) }
-    return { kind: 'events', app: app.data, events: [parsed.data], rejected: [] }
-  }
-
-  if (typeof rest.msg === 'string' && rest.msg.trim()) {
-    return { kind: 'lines', app: app.data, lines: [clip(MAX_LINE)(rest.msg.trim())] }
+    return { kind: 'events', source, events: [parsed.data], rejected: [] }
   }
 
   return {
     kind: 'invalid',
-    error: 'events (array), lines (array), msg (string), or a structured event with level required',
+    error:
+      'Send structured events: { app, events: [{ level, msg, ... }] }. Unstructured lines are no longer accepted; use sdk/logtrail.ts.',
   }
 }

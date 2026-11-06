@@ -1,11 +1,11 @@
 import secrets from '@/secrets'
 import { parseIngestPayload } from '@/services/event-schema'
-import { insertEvents, insertLines } from '@/services/event-store'
+import { insertEvents } from '@/services/event-store'
 import { Hono } from 'hono'
 
 const router = new Hono()
 
-// Agent key auth — separate from the user JWT used by the browser UI
+// Shared-secret auth — separate from the user JWT used by the browser UI
 router.use('*', async (c, next) => {
   const authHeader = c.req.header('Authorization')
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
@@ -31,16 +31,11 @@ router.post('/', async (c) => {
     return c.json({ error: payload.error }, 400)
   }
 
-  if (payload.kind === 'lines') {
-    await insertLines(payload.app, payload.lines)
-    return c.json({ ok: true, written: payload.lines.length })
-  }
-
-  const { app, events, rejected } = payload
+  const { source, events, rejected } = payload
   if (!events.length) {
     return c.json({ error: 'No valid events', rejected }, 400)
   }
-  const rows = await insertEvents(app, events)
+  const rows = await insertEvents(source.app, events, source)
   return c.json({ ok: true, written: rows.length, ...(rejected.length ? { rejected } : {}) })
 })
 

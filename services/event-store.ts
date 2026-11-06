@@ -3,6 +3,7 @@ import { db } from '@database/db'
 import type { EventRow, Level, NewEventRow } from '@database/schema'
 import type { IngestEvent } from './event-schema'
 import { fingerprint } from './fingerprint'
+import { DEFAULT_ENV } from './source'
 
 const MAX_FUTURE_MS = 5 * 60 * 1000
 const MAX_PAST_MS = 24 * 60 * 60 * 1000
@@ -49,10 +50,23 @@ function extraJson(e: IngestEvent): string | null {
   return json.length > MAX_EXTRA ? JSON.stringify({ _truncated: true }) : json
 }
 
-export function toRow(app: string, e: IngestEvent, receivedAt: Date): NewEventRow {
+/** Which process and environment an event came from; the service defaults to the app. */
+export interface EventSource {
+  service?: string
+  env?: string
+}
+
+export function toRow(
+  app: string,
+  e: IngestEvent,
+  receivedAt: Date,
+  source: EventSource = {},
+): NewEventRow {
   const method = e.method?.toUpperCase() ?? null
   const row = {
     app,
+    service: source.service ?? app,
+    env: source.env ?? DEFAULT_ENV,
     ts: resolveTs(e.ts, receivedAt),
     received_at: receivedAt.toISOString(),
     level: e.level,
@@ -69,7 +83,8 @@ export function toRow(app: string, e: IngestEvent, receivedAt: Date): NewEventRo
     stack: e.stack ?? null,
     extra: extraJson(e),
   }
-  return { ...row, fingerprint: fingerprint(row) }
+  // Hashed by service, not app, so issues stay per process and keep their triage state
+  return { ...row, fingerprint: fingerprint({ ...row, app: row.service }) }
 }
 
 /** The camelCase event shape clients send and the viewer renders. Null fields are omitted. */
@@ -117,13 +132,27 @@ async function insert(rows: NewEventRow[]): Promise<EventRow[]> {
   return inserted
 }
 
-export function insertEvents(app: string, events: IngestEvent[]): Promise<EventRow[]> {
+export function insertEvents(
+  app: string,
+  events: IngestEvent[],
+  source: EventSource = {},
+): Promise<EventRow[]> {
   const receivedAt = new Date()
-  return insert(events.map((e) => toRow(app, e, receivedAt)))
+  return insert(events.map((e) => toRow(app, e, receivedAt, source)))
 }
 
-/** Unstructured lines (from the agent) are stored with level NULL. */
+/** Unstructured lines, level NULL. Ingest no longer accepts these; kept for tests and rows from the retired agent. */
 export function insertLines(app: string, lines: string[]): Promise<EventRow[]> {
   const now = new Date().toISOString()
-  return insert(lines.map((msg) => ({ app, ts: now, received_at: now, level: null, msg })))
+  return insert(
+    lines.map((msg) => ({
+      app,
+      service: app,
+      env: DEFAULT_ENV,
+      ts: now,
+      received_at: now,
+      level: null,
+      msg,
+    })),
+  )
 }

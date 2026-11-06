@@ -5,12 +5,17 @@ export type Level = (typeof LEVELS)[number]
 
 export interface EventsTable {
   id: Generated<number>
+  /** The product or codebase, e.g. talent-sales. */
   app: string
+  /** The process within the app, e.g. an api or a worker. */
+  service: string
+  /** production, staging, ... */
+  env: string
   /** When the event happened: client clock, clamped near received_at. ISO-8601 UTC. */
   ts: string
   /** When logtrail received the event. ISO-8601 UTC. Retention uses this. */
   received_at: string
-  /** NULL for unstructured lines shipped by the agent. */
+  /** NULL for unstructured lines from the retired log-shipping agent. */
   level: Level | null
   msg: string
   code: string | null
