@@ -2,6 +2,7 @@ import { db } from '@database/db'
 import type { EventRow, Level } from '@database/schema'
 import type { EventView } from '@/shared/api-types'
 import { sql } from 'kysely'
+import { type Scope, inScope } from './scope'
 import {
   getNeighbors,
   type LevelFilter,
@@ -18,7 +19,7 @@ import {
 
 const REGEX_BATCH = 5000
 
-export interface SearchOptions {
+export interface SearchOptions extends Scope {
   /** Limit to one app; all apps by default */
   app?: string
   query?: string
@@ -70,6 +71,8 @@ function isoBound(value: string | undefined): string | null | undefined {
 /** The newest `limit` matching rows in chronological order, with the count of all matches. */
 async function findMatches({
   app,
+  env,
+  service,
   query,
   regex = false,
   caseSensitive = false,
@@ -106,6 +109,7 @@ async function findMatches({
 
   let filtered = db.selectFrom('events')
   if (app) filtered = filtered.where('app', '=', app)
+  filtered = inScope(filtered, { env, service })
   if (sinceIso) filtered = filtered.where('ts', '>=', sinceIso)
   if (untilIso) filtered = filtered.where('ts', '<=', untilIso)
   if (reqId) {
@@ -203,6 +207,8 @@ async function search<T>(
 export function searchLogs(options: SearchOptions): Promise<SearchResult> {
   return search(options, (row, context) => ({
     app: row.app,
+    service: row.service,
+    env: row.env,
     ts: row.ts,
     ...toLine(row),
     ...(options.context && { context: context.map(toLine) }),

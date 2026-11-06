@@ -37,24 +37,16 @@ const noRelease = (app: string) =>
 
 const LEVEL_FILTERS = [...LEVELS, 'none'] as const
 
-/** Apps whose names differ only in "-" vs "_" or case, e.g. an agent stream and its SDK replacement. */
-function nameVariants(apps: string[]): Map<string, string[]> {
-  const byKey = new Map<string, string[]>()
-  for (const app of apps) {
-    const key = app.toLowerCase().replace(/[-_]/g, '')
-    byKey.set(key, [...(byKey.get(key) ?? []), app])
-  }
-  const variants = new Map<string, string[]>()
-  for (const group of byKey.values()) {
-    for (const app of group)
-      if (group.length > 1)
-        variants.set(
-          app,
-          group.filter((a) => a !== app),
-        )
-  }
-  return variants
-}
+const envParam = z
+  .string()
+  .optional()
+  .describe('Only this environment, e.g. "production" or "staging". Omit for every environment.')
+const serviceParam = z
+  .string()
+  .optional()
+  .describe(
+    'Only this service (process) of the app, e.g. "tpp-auth". Services are listed by list_log_sources.',
+  )
 
 function createMcpServer() {
   const server = new McpServer({ name: 'logtrail', version: '1.1.0' })
@@ -63,18 +55,16 @@ function createMcpServer() {
     'list_log_sources',
     {
       description:
-        'List available log sources. Use the returned "path" as the "source" argument of read_logs / search_logs / get_error_summary. Sources starting with "ingested:" are apps shipping logs to logtrail, with retained event counts and first/last event times. "kind" is "sdk" for structured events (levels, routes, statuses), "agent" for plain text lines from the log-shipping agent, or "mixed". "similarTo" lists other sources whose names differ only in "-"/"_", usually an old agent stream and the SDK app that replaced it; compare lastSeen to see which is live.',
+        'List available log sources. Use the returned "path" as the "source" argument of read_logs / search_logs / get_error_summary. Sources starting with "ingested:" are apps (a product or codebase) sending events to logtrail, with retained event counts, first/last event times, the "services" (processes) within the app and the "envs" they send from. Pass a service or env to the other tools to narrow to one. "kind" is "sdk" for structured events (levels, routes, statuses), "lines" for plain text lines kept from before logtrail required structured events, or "mixed".',
     },
     async () => {
       const stats = await appStats()
-      const variants = nameVariants(stats.map((s) => s.app))
       const ingested = stats.map(({ app, structured, unstructured, ...rest }) => ({
         name: app,
         path: `ingested:${app}`,
         type: 'ingested',
-        kind: !unstructured ? 'sdk' : !structured ? 'agent' : 'mixed',
+        kind: !unstructured ? 'sdk' : !structured ? 'lines' : 'mixed',
         ...rest,
-        ...(variants.has(app) && { similarTo: variants.get(app) }),
       }))
       return text({ sources: [...getLogConfig(), ...ingested] })
     },
@@ -90,6 +80,8 @@ function createMcpServer() {
           .string()
           .optional()
           .describe('One app, e.g. "ingested:myapp" or "myapp". Omit for every app.'),
+        service: serviceParam,
+        env: envParam,
         hours: z.number().int().min(1).max(72).optional().describe('Look-back window (default 24)'),
         levels: z
           .array(z.enum(['error', 'warn']))
@@ -115,9 +107,17 @@ function createMcpServer() {
           .describe('Include stack traces in recent events (default false)'),
       },
     },
-    async ({ source, hours, levels, issues = 20, limit = 10, stacks = false }) => {
+    async ({ source, service, env, hours, levels, issues = 20, limit = 10, stacks = false }) => {
       const app = appOf(source)
-      const summary = await getDashboard({ app, hours, levels, stacks, limit: limit || 1 })
+      const summary = await getDashboard({
+        app,
+        service,
+        env,
+        hours,
+        levels,
+        stacks,
+        limit: limit || 1,
+      })
       const shown = summary.issues.slice(0, issues)
       const appsWithIssues = [...new Set(summary.issues.map((i) => i.app))]
       const unreleased = appsWithIssues.filter((a) =>
@@ -178,6 +178,8 @@ function createMcpServer() {
         'Read the most recent lines of a log source, paginating backwards. Pass the returned nextBefore as "before" to get older lines.',
       inputSchema: {
         source: z.string().describe('Source path from list_log_sources'),
+        service: serviceParam,
+        env: envParam,
         limit: z
           .number()
           .int()
@@ -188,9 +190,11 @@ function createMcpServer() {
         before: z.number().int().min(1).optional().describe('Return lines before this line number'),
       },
     },
-    async ({ source, limit = 100, before }) => {
+    async ({ source, service, env, limit = 100, before }) => {
       if (source.startsWith('ingested:')) {
-        return text(await getHistory(source.slice('ingested:'.length), before, limit))
+        return text(
+          await getHistory(source.slice('ingested:'.length), before, limit, { service, env }),
+        )
       }
       const entry = getLogConfig().find((l) => l.path === source)
       if (!entry) return fail(`Unknown log source: ${source}`)
@@ -209,12 +213,14 @@ function createMcpServer() {
     'search_logs',
     {
       description:
-        'Search ingested events across ALL apps by default, or one app. Filter by any combination of text (substring or regex over every field), request ID, time window, level, HTTP status (exact or a class like "5xx"), error code, user ID, route pattern and path prefix; at least one filter is required. Returns the newest matches in chronological order as parsed events (id, app, ts, level, msg, code, reqId, method, path, route, status, duration, userId, release, stack, fingerprint, extra). Agent lines have level null and only ts and msg. An event id works as read_logs "before"; a fingerprint works with get_issue.',
+        'Search ingested events across ALL apps by default, or one app, service or environment. Filter by any combination of text (substring or regex over every field), request ID, time window, level, HTTP status (exact or a class like "5xx"), error code, user ID, route pattern and path prefix; at least one filter is required. Returns the newest matches in chronological order as parsed events (id, app, service, env, ts, level, msg, code, reqId, method, path, route, status, duration, userId, release, stack, fingerprint, extra). Old plain-text lines have level null and only ts and msg. An event id works as read_logs "before"; a fingerprint works with get_issue.',
       inputSchema: {
         source: z
           .string()
           .optional()
           .describe('One app, e.g. "ingested:myapp" or "myapp". Omit to search every app.'),
+        service: serviceParam,
+        env: envParam,
         query: z.string().optional().describe('Text to find in any field'),
         regex: z.boolean().optional(),
         caseSensitive: z.boolean().optional(),
@@ -224,7 +230,7 @@ function createMcpServer() {
         levels: z
           .array(z.enum(LEVEL_FILTERS))
           .optional()
-          .describe('Levels to include; "none" is unstructured agent lines'),
+          .describe('Levels to include; "none" is old plain-text lines'),
         status: z
           .union([z.number().int(), z.string().regex(/^[1-5]xx$/i)])
           .optional()
@@ -239,7 +245,7 @@ function createMcpServer() {
           .min(0)
           .max(20)
           .optional()
-          .describe('Events of the same app before and after each match (default 0)'),
+          .describe('Events of the same app before and after each match (any service) (default 0)'),
         limit: z
           .number()
           .int()

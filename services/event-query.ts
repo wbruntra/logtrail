@@ -33,6 +33,9 @@ export interface AppStats {
   structured: number
   /** Plain text lines shipped by the agent */
   unstructured: number
+  /** Processes that have sent events, and the environments they sent from */
+  services: string[]
+  envs: string[]
   firstSeen: string
   lastSeen: string
 }
@@ -47,16 +50,22 @@ export async function appStats(): Promise<AppStats[]> {
       eb.fn.count<number>('level').as('structured'),
       eb.fn.min('ts').as('firstSeen'),
       eb.fn.max('ts').as('lastSeen'),
+      sql<string>`group_concat(distinct service)`.as('services'),
+      sql<string>`group_concat(distinct env)`.as('envs'),
     ])
     .groupBy('app')
     .orderBy('app')
     .execute()
-  return rows.map((r) => ({ ...r, unstructured: r.eventCount - r.structured }))
+  return rows.map((r) => ({
+    ...r,
+    unstructured: r.eventCount - r.structured,
+    services: r.services.split(',').sort(),
+    envs: r.envs.split(',').sort(),
+  }))
 }
 
-async function countLines(app: string): Promise<number> {
-  const { n } = await db
-    .selectFrom('events')
+async function countLines(app: string, scope: Scope = {}): Promise<number> {
+  const { n } = await inScope(db.selectFrom('events'), scope)
     .select((eb) => eb.fn.countAll<number>().as('n'))
     .where('app', '=', app)
     .executeTakeFirstOrThrow()
@@ -64,16 +73,15 @@ async function countLines(app: string): Promise<number> {
 }
 
 /** Up to `limit` lines before the `before` cursor (or the newest), oldest first. */
-export async function getHistory(app: string, before?: number, limit = 100) {
-  let query = db
-    .selectFrom('events')
+export async function getHistory(app: string, before?: number, limit = 100, scope: Scope = {}) {
+  let query = inScope(db.selectFrom('events'), scope)
     .selectAll()
     .where('app', '=', app)
     .orderBy('id', 'desc')
     .limit(limit + 1)
   if (before !== undefined) query = query.where('id', '<', before)
 
-  const [rows, totalLines] = await Promise.all([query.execute(), countLines(app)])
+  const [rows, totalLines] = await Promise.all([query.execute(), countLines(app, scope)])
   const hasMore = rows.length > limit
   const page = rows.slice(0, limit).reverse()
   return {

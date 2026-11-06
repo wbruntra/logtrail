@@ -44,6 +44,8 @@ export function IssuesCard({
   /** Called after issues are resolved, muted or reopened */
   onChanged: () => void
 }) {
+  // Name the service only where issues of several services are listed together
+  const showService = new Set(issues.map((i) => i.service)).size > 1
   const [tab, setTab] = useState<IssueState>('open')
   const [level, setLevel] = useState<LevelFilter>('all')
   const [sort, setSort] = useState<Sort>('recent')
@@ -185,6 +187,7 @@ export function IssuesCard({
                     </Link>
                   </div>
                   <div class="row-sub muted">
+                    {showService && <span class="badge">{i.service}</span>}
                     <Route method={i.method} route={i.route} />
                     {i.code && <code class="code">{i.code}</code>}
                     {i.status && <span class={`status s${String(i.status)[0]}`}>{i.status}</span>}

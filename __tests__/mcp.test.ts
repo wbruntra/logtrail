@@ -42,15 +42,40 @@ beforeEach(async () => {
 })
 
 describe('mcp tools', () => {
-  it('lists sources with counts, kind and name variants', async () => {
-    await insertEvents('tpp-auth', [event({})])
-    await insertLines('tpp_auth', ['old line'])
+  it('lists sources with counts, kind, services and envs', async () => {
+    await insertEvents('talent-sales', [event({})], { service: 'tpp-auth', env: 'production' })
+    await insertEvents('talent-sales', [event({})], { service: 'api', env: 'staging' })
+    await insertLines('old', ['old line'])
     const { sources } = await call('list_log_sources')
     const ingested = sources.filter((s: { type: string }) => s.type === 'ingested')
     expect(ingested).toMatchObject([
-      { name: 'tpp-auth', kind: 'sdk', eventCount: 1, similarTo: ['tpp_auth'] },
-      { name: 'tpp_auth', kind: 'agent', eventCount: 1, similarTo: ['tpp-auth'] },
+      { name: 'old', kind: 'lines', eventCount: 1 },
+      {
+        name: 'talent-sales',
+        kind: 'sdk',
+        eventCount: 2,
+        services: ['api', 'tpp-auth'],
+        envs: ['production', 'staging'],
+      },
     ])
+  })
+
+  it('narrows search, history and summary to a service and env', async () => {
+    await insertEvents('talent-sales', [event({ msg: 'auth down' })], {
+      service: 'tpp-auth',
+      env: 'production',
+    })
+    await insertEvents('talent-sales', [event({ msg: 'api down' })], {
+      service: 'api',
+      env: 'staging',
+    })
+    const found = await call('search_logs', { query: 'down', service: 'tpp-auth' })
+    expect(found.results.map((r: { msg: string }) => r.msg)).toEqual(['auth down'])
+    expect(found.results[0]).toMatchObject({ service: 'tpp-auth', env: 'production' })
+    const staging = await call('read_logs', { source: 'ingested:talent-sales', env: 'staging' })
+    expect(staging.lines).toHaveLength(1)
+    const summary = await call('get_error_summary', { source: 'talent-sales', env: 'staging' })
+    expect(summary.totals.errors).toBe(1)
   })
 
   it('summarizes one app compactly and notes missing releases', async () => {

@@ -53,6 +53,7 @@ function IssueView({ d, reload }: { d: IssueDetail; reload: () => void }) {
         </div>
         <h1 class="issue-msg">{d.msg}</h1>
         <div class="row-sub muted">
+          {d.service !== d.app && <span class="badge">{d.service}</span>}
           <Route method={d.method} route={d.route} />
           {d.code && <code class="code">{d.code}</code>}
           {d.status && <span class={`status s${String(d.status)[0]}`}>{d.status}</span>}

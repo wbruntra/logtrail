@@ -1,4 +1,10 @@
-import type { EventPage as EventPageData, EventView, Level, Overview } from '@shared/api-types.ts'
+import type {
+  AppDetail,
+  EventPage as EventPageData,
+  EventView,
+  Level,
+  Overview,
+} from '@shared/api-types.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Ansi } from '../components/Ansi'
 import { Empty, ErrorBox, LevelBadge, Route, StackTrace } from '../components/ui'
@@ -39,6 +45,11 @@ export function EventsPage() {
   }
   const [live, setLive] = useState(true)
   const apps = useApi<Overview>('/api/apps?hours=1')
+  const services = useApi<AppDetail>(
+    filter.app
+      ? `/api/apps/${encodeURIComponent(filter.app)}?hours=24&env=${encodeURIComponent(env)}`
+      : null,
+  ).data?.services
   const [text, setText] = useState(filter.q ?? '')
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -83,7 +94,7 @@ export function EventsPage() {
           class="select"
           aria-label="App"
           value={filter.app ?? ''}
-          onChange={(e) => setQuery({ app: e.currentTarget.value })}
+          onChange={(e) => setQuery({ app: e.currentTarget.value, service: null })}
         >
           <option value="">All apps</option>
           {apps.data?.apps.map((a) => (
@@ -95,6 +106,24 @@ export function EventsPage() {
             <option value={filter.app}>{filter.app}</option>
           )}
         </select>
+        {filter.app && (services?.length || filter.service) && (
+          <select
+            class="select"
+            aria-label="Service"
+            value={filter.service ?? ''}
+            onChange={(e) => setQuery({ service: e.currentTarget.value })}
+          >
+            <option value="">All services</option>
+            {services?.map((s) => (
+              <option key={s.service} value={s.service}>
+                {s.service}
+              </option>
+            ))}
+            {filter.service && !services?.some((s) => s.service === filter.service) && (
+              <option value={filter.service}>{filter.service}</option>
+            )}
+          </select>
+        )}
         <div class="chips" role="group" aria-label="Levels">
           {LEVEL_CHIPS.map((c) => (
             <button

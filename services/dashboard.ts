@@ -4,12 +4,13 @@ import type { AlertLevel } from '@/shared/api-types'
 import { sql } from 'kysely'
 import { type EventJson, toEvent } from './event-store'
 import { ALERT_LEVELS, issueSummaries } from './issues'
+import { type Scope, inScope } from './scope'
 
 export type { Issue } from './issues'
 
 export const MAX_HOURS = 72
 
-export interface DashboardOptions {
+export interface DashboardOptions extends Scope {
   hours?: number | string
   /** Levels for recentErrors and issues: comma-separated or an array (default both) */
   levels?: string | string[]
@@ -59,12 +60,13 @@ export async function getDashboard(options: DashboardOptions = {}) {
   const limit = int(options.limit, 25, 200)
   const issueLimit = int(options.issueLimit, 50, 250)
   const levels = alertLevels(options.levels)
-  const { app } = options
+  const { app, env, service } = options
 
   const now = new Date()
   const since = new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString()
   let inWindow = db.selectFrom('events').where('level', 'in', ALERT_LEVELS).where('ts', '>=', since)
   if (app) inWindow = inWindow.where('app', '=', app)
+  inWindow = inScope(inWindow, { env, service })
   const count = sql<number>`count(*)`.as('count')
 
   const [byAppLevel, byHourLevel, topCodes, recent, issues] = await Promise.all([
@@ -88,7 +90,7 @@ export async function getDashboard(options: DashboardOptions = {}) {
       .orderBy('id', 'desc')
       .limit(limit)
       .execute(),
-    issueSummaries({ app, levels, since, limit: issueLimit }),
+    issueSummaries({ app, env, service, levels, since, limit: issueLimit }),
   ])
 
   const totals = { errors: 0, warns: 0 }
