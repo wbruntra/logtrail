@@ -30,6 +30,8 @@ function filterOf(c: Context): EventFilter {
   const after = parseInt(c.req.query('after') ?? '', 10)
   return {
     app: c.req.query('app') || undefined,
+    env: c.req.query('env') || undefined,
+    service: c.req.query('service') || undefined,
     levels: levelsOf(c),
     q: c.req.query('q') || undefined,
     reqId: c.req.query('reqId') || undefined,
@@ -44,10 +46,10 @@ router.get('/', async (c) => c.json(await listEvents(filterOf(c))))
 
 // New events as they arrive, filtered by ?app= and ?levels=
 router.get('/stream', (c) => {
-  const { app, levels } = filterOf(c)
+  const { app, env, service, levels } = filterOf(c)
   c.header('X-Accel-Buffering', 'no') // Disable nginx buffering
   return streamSSE(c, async (stream) => {
-    const unsubscribe = subscribeEvents({ app, levels }, (event) => {
+    const unsubscribe = subscribeEvents({ app, env, service, levels }, (event) => {
       stream.writeSSE({ data: JSON.stringify(event) })
     })
     await holdOpen(stream, unsubscribe)

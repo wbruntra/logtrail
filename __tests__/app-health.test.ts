@@ -301,6 +301,42 @@ describe('events', () => {
   })
 })
 
+describe('env and service scope', () => {
+  it('splits an app by service and narrows everything to an env', async () => {
+    await insertEvents('shop', [event({ ts: ago(MINUTE) })], { service: 'api', env: 'production' })
+    await insertEvents('shop', [event({ ts: ago(MINUTE), msg: 'job failed' })], {
+      service: 'worker',
+      env: 'production',
+    })
+    await insertEvents('shop', [event({ ts: ago(MINUTE) }), event({ ts: ago(MINUTE) })], {
+      service: 'api',
+      env: 'staging',
+    })
+
+    const o = await getOverview(24, new Date(), { env: 'production' })
+    expect(o.envs).toEqual(['production', 'staging'])
+    expect(o.apps.map((a) => [a.app, a.errors])).toEqual([['shop', 2]])
+    expect((await getOverview(24, new Date(), { env: 'staging' })).apps[0].errors).toBe(2)
+
+    const d = (await getAppDetail('shop', 24, new Date(), {
+      env: 'production',
+      service: 'worker',
+    }))!
+    expect(d.totals.errors).toBe(1)
+    expect(d.issues.map((i) => [i.msg, i.service])).toEqual([['job failed', 'worker']])
+    expect(d.services.map((s) => [s.service, s.errors])).toEqual([
+      ['api', 1],
+      ['worker', 1],
+    ])
+    expect(d.envs).toEqual(['production', 'staging'])
+    expect(await getAppDetail('shop', 24, new Date(), { env: 'nope' })).toBeNull()
+
+    const events = await listEvents({ app: 'shop', env: 'staging', service: 'api' })
+    expect(events.events).toHaveLength(2)
+    expect(events.events[0]).toMatchObject({ service: 'api', env: 'staging' })
+  })
+})
+
 describe('HTTP', () => {
   it('serves apps, issues and events behind login', async () => {
     const [e] = await insertEvents('shop', [event({})])

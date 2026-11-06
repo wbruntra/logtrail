@@ -10,6 +10,7 @@ import type {
 } from '@/shared/api-types'
 import { type ExpressionBuilder, sql } from 'kysely'
 import { listEvents } from './event-query'
+import { type Scope, inScope } from './scope'
 import { normalizePath } from './fingerprint'
 import { bucketOf, makeWindow, toSeries } from './window'
 
@@ -18,6 +19,7 @@ export const ALERT_LEVELS = ['error', 'warn'] as const
 export interface Issue {
   fingerprint: string
   app: string
+  service: string
   level: AlertLevel
   msg: string
   code: string | null
@@ -34,7 +36,7 @@ export interface Issue {
   latestId: number
 }
 
-export interface IssueFilter {
+export interface IssueFilter extends Scope {
   fingerprints?: string[]
   app?: string
   levels?: readonly AlertLevel[]
@@ -47,6 +49,8 @@ export interface IssueFilter {
 export async function issueSummaries({
   fingerprints,
   app,
+  env,
+  service,
   levels,
   since,
   limit,
@@ -68,6 +72,7 @@ export async function issueSummaries({
     .$narrowType<{ fingerprint: string }>()
   if (fingerprints) groups = groups.where('fingerprint', 'in', fingerprints)
   if (app) groups = groups.where('app', '=', app)
+  groups = inScope(groups, { env, service })
   if (levels) groups = groups.where('level', 'in', levels)
   if (since) groups = groups.where('ts', '>=', since)
 
@@ -103,6 +108,7 @@ export async function issueSummaries({
     return {
       fingerprint: r.fingerprint,
       app: e.app,
+      service: e.service,
       level: e.level as AlertLevel,
       msg: e.msg,
       code: e.code,
@@ -186,10 +192,12 @@ export async function resolvedSince(): Promise<Map<string, string>> {
 /** Issues seen in the window, with per-bucket counts for sparklines. */
 export async function windowIssues(
   window: Window,
-  filter: { app?: string; limit?: number } = {},
+  filter: Scope & { app?: string; limit?: number } = {},
 ): Promise<IssueSummary[]> {
   const issues = await issueSummaries({
     app: filter.app,
+    env: filter.env,
+    service: filter.service,
     since: window.since,
     limit: filter.limit ?? 250,
   })

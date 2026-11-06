@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { Ansi } from '../components/Ansi'
 import { Empty, ErrorBox, LevelBadge, Route, StackTrace } from '../components/ui'
 import { api, useApi } from '../lib/api'
+import { useEnv } from '../lib/settings'
 import { duration, time } from '../lib/format'
 import { appHref, eventHref, issueHref, Link, setQuery, useLocation } from '../lib/router'
 
@@ -17,6 +18,8 @@ const LEVEL_CHIPS: { key: Level | 'none'; label: string }[] = [
 
 export interface EventFilter {
   app?: string
+  env?: string
+  service?: string
   levels?: string
   q?: string
   reqId?: string
@@ -25,8 +28,11 @@ export interface EventFilter {
 /** The event browser: filters live in the URL so a view can be shared or bookmarked. */
 export function EventsPage() {
   const { query } = useLocation()
+  const env = useEnv()
   const filter: EventFilter = {
     app: query.get('app') ?? undefined,
+    env: env || undefined,
+    service: query.get('service') ?? undefined,
     levels: query.get('levels') ?? undefined,
     q: query.get('q') ?? undefined,
     reqId: query.get('reqId') ?? undefined,
@@ -251,6 +257,8 @@ export function EventList({
     if (!live || loadedKey !== key) return
     const q = new URLSearchParams()
     if (filter.app) q.set('app', filter.app)
+    if (filter.env) q.set('env', filter.env)
+    if (filter.service) q.set('service', filter.service)
     if (filter.levels) q.set('levels', filter.levels)
     const source = new EventSource(`/api/events/stream?${q}`, { withCredentials: true })
     let closed = false
@@ -380,7 +388,12 @@ export function EventList({
                     <span class="event-time" title={e.ts}>
                       {time(e.ts)}
                     </span>
-                    {showApp && <span class="event-app">{e.app}</span>}
+                    {showApp && (
+                      <span class="event-app">
+                        {e.app}
+                        {e.service !== e.app && <span class="muted"> / {e.service}</span>}
+                      </span>
+                    )}
                     <LevelBadge level={e.level} />
                     <span class="event-msg">
                       {e.status !== null && (

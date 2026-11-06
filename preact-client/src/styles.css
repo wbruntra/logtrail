@@ -1089,3 +1089,11 @@ a.event-row:hover {
   border-color: transparent;
   color: var(--critical-text);
 }
+
+.setup-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.5;
+}

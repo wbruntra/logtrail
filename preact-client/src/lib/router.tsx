@@ -77,7 +77,13 @@ export function Link({ href, onClick, ...props }: AnchorProps) {
 export const appHref = (app: string) => `/apps/${encodeURIComponent(app)}`
 export const issueHref = (fingerprint: string) => `/issues/${fingerprint}`
 export const eventHref = (id: number) => `/events/${id}`
-export function eventsHref(params: { app?: string; levels?: string; q?: string; reqId?: string }) {
+export function eventsHref(params: {
+  app?: string
+  service?: string
+  levels?: string
+  q?: string
+  reqId?: string
+}) {
   const query = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) if (v) query.set(k, v)
   const qs = query.toString()

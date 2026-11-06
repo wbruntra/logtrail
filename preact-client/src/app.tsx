@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { WindowPicker } from './components/ui'
+import { EnvPicker, WindowPicker } from './components/ui'
 import { checkStatus, login, logout, useAuthenticated } from './lib/auth'
 import { Link, match, useLocation } from './lib/router'
 import { AppPage } from './pages/AppPage'
@@ -7,6 +7,7 @@ import { EventPage } from './pages/EventPage'
 import { EventsPage } from './pages/EventsPage'
 import { IssuePage } from './pages/IssuePage'
 import { Overview } from './pages/Overview'
+import { SetupPage } from './pages/SetupPage'
 
 export function App() {
   const authenticated = useAuthenticated()
@@ -21,7 +22,7 @@ function Shell() {
   const { path } = useLocation()
   let page
   let params: Record<string, string> | null
-  let section: 'overview' | 'events' = 'overview'
+  let section: 'overview' | 'events' | 'setup' = 'overview'
   if (path === '/' || path === '') page = <Overview />
   else if ((params = match('/apps/:app', path)))
     page = <AppPage key={params.app} app={params.app} />
@@ -30,6 +31,9 @@ function Shell() {
   else if ((params = match('/events/:id', path)) && /^\d+$/.test(params.id)) {
     page = <EventPage key={params.id} id={Number(params.id)} />
     section = 'events'
+  } else if (match('/setup', path)) {
+    page = <SetupPage />
+    section = 'setup'
   } else if (match('/events', path)) {
     page = <EventsPage />
     section = 'events'
@@ -49,8 +53,12 @@ function Shell() {
           <Link href="/events" aria-current={section === 'events' ? 'page' : undefined}>
             Events
           </Link>
+          <Link href="/setup" aria-current={section === 'setup' ? 'page' : undefined}>
+            Setup
+          </Link>
         </nav>
         <div class="topbar-right">
+          <EnvPicker />
           <WindowPicker />
           <button type="button" class="btn ghost small" onClick={() => void logout()}>
             Log out

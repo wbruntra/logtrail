@@ -3,6 +3,7 @@ import type { EventRow, Level } from '@database/schema'
 import type { EventDetail, EventPage, EventView } from '@/shared/api-types'
 import { sql } from 'kysely'
 import { eventEmitter, toEvent } from './event-store'
+import { type Scope, inScope } from './scope'
 
 // Read side of the event store, shaped for the log viewer and MCP: each event is
 // a "line" whose lineNumber is the row id (a stable cursor, not a position).
@@ -143,6 +144,8 @@ export function toEventView(row: EventRow): EventView {
   return {
     id: row.id,
     app: row.app,
+    service: row.service,
+    env: row.env,
     ts: row.ts,
     receivedAt: row.received_at,
     level: row.level,
@@ -165,7 +168,7 @@ export function toEventView(row: EventRow): EventView {
 /** A level, or 'none' for the agent's unstructured lines */
 export type LevelFilter = Level | 'none'
 
-export interface EventFilter {
+export interface EventFilter extends Scope {
   app?: string
   fingerprint?: string
   levels?: LevelFilter[]
@@ -182,6 +185,8 @@ export interface EventFilter {
 /** Matching events, newest first, a page at a time. */
 export async function listEvents({
   app,
+  env,
+  service,
   fingerprint,
   levels,
   q,
@@ -197,6 +202,7 @@ export async function listEvents({
     .orderBy('id', 'desc')
     .limit(max + 1)
   if (app) query = query.where('app', '=', app)
+  query = inScope(query, { env, service })
   if (fingerprint) query = query.where('fingerprint', '=', fingerprint)
   if (reqId) query = query.where('req_id', '=', reqId)
   if (before !== undefined) query = query.where('id', '<', before)
@@ -250,12 +256,14 @@ export async function getEventDetail(id: number, neighbors = 10): Promise<EventD
 
 /** Calls onEvent for each new event matching the filter's app and levels. */
 export function subscribeEvents(
-  filter: Pick<EventFilter, 'app' | 'levels'>,
+  filter: Pick<EventFilter, 'app' | 'env' | 'service' | 'levels'>,
   onEvent: (event: EventView) => void,
 ): () => void {
   const listener = (rows: EventRow[]) => {
     for (const row of rows) {
       if (filter.app && row.app !== filter.app) continue
+      if (filter.env && row.env !== filter.env) continue
+      if (filter.service && row.service !== filter.service) continue
       if (filter.levels?.length && !filter.levels.includes(row.level ?? 'none')) continue
       onEvent(toEventView(row))
     }

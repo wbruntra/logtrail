@@ -17,7 +17,9 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     const body = (await res.json().catch(() => null)) as { error?: string } | null
     throw new ApiError(body?.error ?? `${res.status} ${res.statusText}`, res.status)
   }
-  return res.json() as Promise<T>
+  // Text endpoints (the setup instructions) come back as a string
+  const isJson = res.headers.get('content-type')?.includes('json')
+  return (isJson ? res.json() : res.text()) as Promise<T>
 }
 
 const pathOf = (url: string | null) => url?.split('?')[0] ?? null

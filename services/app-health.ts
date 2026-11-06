@@ -6,11 +6,13 @@ import type {
   Overview,
   RouteHealth,
   Series,
+  ServiceSummary,
   Window,
 } from '@/shared/api-types'
 import { sql } from 'kysely'
 import { normalizePath } from './fingerprint'
 import { ALERT_LEVELS, notMuted, windowIssues } from './issues'
+import { type Scope, inScope } from './scope'
 import { bucketOf, makeWindow, toSeries } from './window'
 
 interface LevelBucket {
@@ -26,7 +28,7 @@ const IS_MUTED = sql<number>`coalesce(fingerprint in
   (select fingerprint from issue_states where status = 'muted'), 0)`
 
 /** Event counts per app, level, muted-ness and bucket over the window. */
-function levelBuckets(window: Window, app?: string): Promise<LevelBucket[]> {
+function levelBuckets(window: Window, app?: string, scope: Scope = {}): Promise<LevelBucket[]> {
   const bucket = bucketOf(window)
   let query = db
     .selectFrom('events')
@@ -40,7 +42,7 @@ function levelBuckets(window: Window, app?: string): Promise<LevelBucket[]> {
     .where('ts', '>=', window.since)
     .groupBy(['app', 'level', IS_MUTED, bucket])
   if (app) query = query.where('app', '=', app)
-  return query.execute()
+  return inScope(query, scope).execute()
 }
 
 interface Series3 {
@@ -69,7 +71,7 @@ const sum = (s: Series) => s.reduce((a, b) => a + b, 0)
 const mutedCount = (rows: LevelBucket[]) => rows.reduce((n, r) => n + (r.muted ? r.count : 0), 0)
 
 /** Per app: newest event, newest error, and whether it ever sent structured events. */
-async function appFacts(app?: string) {
+async function appFacts(app?: string, scope: Scope = {}) {
   let query = db
     .selectFrom('events')
     .select((eb) => [
@@ -88,7 +90,10 @@ async function appFacts(app?: string) {
     query = query.where('app', '=', app)
     errors = errors.where('app', '=', app)
   }
-  const [facts, lastErrors] = await Promise.all([query.execute(), errors.execute()])
+  const [facts, lastErrors] = await Promise.all([
+    inScope(query, scope).execute(),
+    inScope(errors, scope).execute(),
+  ])
   const lastErrorAt = new Map(lastErrors.map((r) => [r.app, r.lastErrorAt]))
   return new Map(
     facts.map((f) => [
@@ -106,10 +111,9 @@ async function appFacts(app?: string) {
  * Open issues active in the window per app, and how many of them first
  * appeared in it. Muted issues, and resolved ones not seen since, don't count.
  */
-async function issueCounts(window: Window) {
+async function issueCounts(window: Window, scope: Scope = {}) {
   const [rows, states] = await Promise.all([
-    db
-      .selectFrom('events')
+    inScope(db.selectFrom('events'), scope)
       .select((eb) => [
         'app',
         'fingerprint',
@@ -137,12 +141,17 @@ async function issueCounts(window: Window) {
   return counts
 }
 
-export async function getOverview(hours?: number | string, now = new Date()): Promise<Overview> {
+export async function getOverview(
+  hours?: number | string,
+  now = new Date(),
+  scope: Scope = {},
+): Promise<Overview> {
   const window = makeWindow(hours, now)
-  const [buckets, facts, issues] = await Promise.all([
-    levelBuckets(window),
-    appFacts(),
-    issueCounts(window),
+  const [buckets, facts, issues, envs] = await Promise.all([
+    levelBuckets(window, undefined, scope),
+    appFacts(undefined, scope),
+    issueCounts(window, scope),
+    envsOf(),
   ])
 
   const byApp = new Map<string, LevelBucket[]>()
@@ -176,13 +185,12 @@ export async function getOverview(hours?: number | string, now = new Date()): Pr
   for (const a of apps) {
     for (const k of Object.keys(totals) as (keyof typeof totals)[]) totals[k] += a[k]
   }
-  return { window, totals: { ...totals, muted: mutedCount(buckets) }, apps }
+  return { window, envs, totals: { ...totals, muted: mutedCount(buckets) }, apps }
 }
 
 /** Errors and warnings per route; ids in raw paths are folded so /users/1 and /users/2 merge. */
-async function routeHealth(window: Window, app: string): Promise<RouteHealth[]> {
-  const rows = await db
-    .selectFrom('events')
+async function routeHealth(window: Window, app: string, scope: Scope): Promise<RouteHealth[]> {
+  const rows = await inScope(db.selectFrom('events'), scope)
     .select((eb) => ['method', 'route', 'path', 'level', eb.fn.countAll<number>().as('count')])
     .where('app', '=', app)
     .where('ts', '>=', window.since)
@@ -206,9 +214,9 @@ async function columnCounts(
   window: Window,
   app: string,
   column: 'status' | 'release',
+  scope: Scope,
 ): Promise<Breakdown[]> {
-  let query = db
-    .selectFrom('events')
+  let query = inScope(db.selectFrom('events'), scope)
     .select((eb) => [eb.ref(column).as('value'), eb.fn.countAll<number>().as('count')])
     .where('app', '=', app)
     .where('ts', '>=', window.since)
@@ -224,26 +232,76 @@ async function columnCounts(
   return rows.map((r) => ({ value: String(r.value), count: r.count }))
 }
 
+/** Environments that have sent events, production first. */
+async function envsOf(app?: string): Promise<string[]> {
+  let query = db.selectFrom('events').select('env').distinct()
+  if (app) query = query.where('app', '=', app)
+  const envs = (await query.execute()).map((r) => r.env).sort()
+  return [...envs.filter((e) => e === 'production'), ...envs.filter((e) => e !== 'production')]
+}
+
+/** Per service of the app: counts over the window; muted issues leave the error and warn counts. */
+async function serviceSummaries(
+  window: Window,
+  app: string,
+  env?: string,
+): Promise<ServiceSummary[]> {
+  const rows = await inScope(db.selectFrom('events'), { env })
+    .select((eb) => [
+      'service',
+      eb.fn.countAll<number>().as('events'),
+      eb.fn.max('ts').as('lastEventAt'),
+    ])
+    .where('app', '=', app)
+    .where('ts', '>=', window.since)
+    .groupBy('service')
+    .execute()
+  const alerts = await inScope(db.selectFrom('events'), { env })
+    .select((eb) => ['service', 'level', eb.fn.countAll<number>().as('count')])
+    .where('app', '=', app)
+    .where('ts', '>=', window.since)
+    .where('level', 'in', ALERT_LEVELS)
+    .where(notMuted)
+    .groupBy(['service', 'level'])
+    .execute()
+  const count = (service: string, level: string) =>
+    alerts.find((a) => a.service === service && a.level === level)?.count ?? 0
+  return rows
+    .map((r) => ({
+      service: r.service,
+      events: r.events,
+      errors: count(r.service, 'error'),
+      warns: count(r.service, 'warn'),
+      lastEventAt: r.lastEventAt,
+    }))
+    .sort((a, b) => b.errors - a.errors || b.warns - a.warns || b.events - a.events)
+}
+
 /** One app's health over the window, or null if nothing is retained for it. */
 export async function getAppDetail(
   app: string,
   hours?: number | string,
   now = new Date(),
+  scope: Scope = {},
 ): Promise<AppDetail | null> {
   const window = makeWindow(hours, now)
-  const facts = (await appFacts(app)).get(app)
+  const facts = (await appFacts(app, scope)).get(app)
   if (!facts) return null
 
-  const [buckets, issues, routes, statuses, releases] = await Promise.all([
-    levelBuckets(window, app),
-    windowIssues(window, { app }),
-    routeHealth(window, app),
-    columnCounts(window, app, 'status'),
-    columnCounts(window, app, 'release'),
+  const [buckets, issues, routes, statuses, releases, envs, services] = await Promise.all([
+    levelBuckets(window, app, scope),
+    windowIssues(window, { app, ...scope }),
+    routeHealth(window, app, scope),
+    columnCounts(window, app, 'status', scope),
+    columnCounts(window, app, 'release', scope),
+    envsOf(app),
+    serviceSummaries(window, app, scope.env),
   ])
   const s = seriesOf(window, buckets)
   return {
     app,
+    envs,
+    services,
     kind: facts.kind,
     window,
     totals: {

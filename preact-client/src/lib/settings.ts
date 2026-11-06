@@ -39,3 +39,46 @@ export function useHours(): number {
   }, [])
   return value
 }
+
+// The environment shown everywhere: one name, or 'all'. Production unless chosen otherwise.
+
+export const ALL_ENVS = 'all'
+const ENV_KEY = 'logtrail.env'
+
+function readEnv(): string {
+  try {
+    return localStorage.getItem(ENV_KEY) || 'production'
+  } catch {
+    return 'production'
+  }
+}
+
+let env = readEnv()
+const envListeners = new Set<(e: string) => void>()
+
+export function setEnv(e: string) {
+  env = e
+  try {
+    localStorage.setItem(ENV_KEY, e)
+  } catch {}
+  envListeners.forEach((fn) => fn(e))
+}
+
+/** The selected env as the API's `env` param: '' means every environment. */
+export function useEnv(): string {
+  const [value, setValue] = useState(env)
+  useEffect(() => {
+    envListeners.add(setValue)
+    return () => void envListeners.delete(setValue)
+  }, [])
+  return value === ALL_ENVS ? '' : value
+}
+
+export function useSelectedEnv(): string {
+  const [value, setValue] = useState(env)
+  useEffect(() => {
+    envListeners.add(setValue)
+    return () => void envListeners.delete(setValue)
+  }, [])
+  return value
+}

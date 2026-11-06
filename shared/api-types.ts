@@ -45,6 +45,8 @@ export interface AppSummary {
 
 export interface Overview {
   window: Window
+  /** Every environment that has sent events, for the env switcher */
+  envs: string[]
   totals: {
     events: number
     errors: number
@@ -60,6 +62,7 @@ export interface Overview {
 export interface IssueSummary {
   fingerprint: string
   app: string
+  service: string
   level: AlertLevel
   msg: string
   code: string | null
@@ -97,8 +100,20 @@ export interface RouteHealth {
   warns: number
 }
 
+/** One process of an app over the window */
+export interface ServiceSummary {
+  service: string
+  events: number
+  errors: number
+  warns: number
+  lastEventAt: string | null
+}
+
 export interface AppDetail {
   app: string
+  envs: string[]
+  /** Services in the selected env, regardless of the service filter */
+  services: ServiceSummary[]
   kind: 'structured' | 'lines'
   window: Window
   /** Errors and warnings exclude muted issues; `muted` counts those left out */
@@ -117,6 +132,8 @@ export interface AppDetail {
 export interface EventView {
   id: number
   app: string
+  service: string
+  env: string
   ts: string
   receivedAt: string
   level: Level | null

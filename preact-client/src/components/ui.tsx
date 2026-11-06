@@ -1,10 +1,10 @@
-import type { Level } from '@shared/api-types.ts'
+import type { Level, Overview } from '@shared/api-types.ts'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
-import type { Resource } from '../lib/api'
+import { type Resource, useApi } from '../lib/api'
 import { ago, fullTime } from '../lib/format'
 import { Link } from '../lib/router'
-import { setHours, useHours, WINDOWS } from '../lib/settings'
+import { ALL_ENVS, setEnv, setHours, useHours, useSelectedEnv, WINDOWS } from '../lib/settings'
 
 const LEVEL_LABEL: Record<Level | 'none', string> = {
   error: 'Error',
@@ -104,6 +104,28 @@ export function WindowPicker() {
         </button>
       ))}
     </div>
+  )
+}
+
+/** Switches the environment every view shows; hidden while there is only one. */
+export function EnvPicker() {
+  const envs = useApi<Overview>('/api/apps?hours=1').data?.envs ?? []
+  const selected = useSelectedEnv()
+  if (envs.length < 2) return null
+  return (
+    <select
+      class="select"
+      aria-label="Environment"
+      value={selected}
+      onChange={(e) => setEnv(e.currentTarget.value)}
+    >
+      {envs.map((env) => (
+        <option key={env} value={env}>
+          {env}
+        </option>
+      ))}
+      <option value={ALL_ENVS}>all environments</option>
+    </select>
   )
 }
 

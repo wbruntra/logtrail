@@ -4,28 +4,35 @@ import { IssuesCard } from '../components/IssuesCard'
 import { Ago, Card, Crumbs, Empty, Loaded, Route, Stat } from '../components/ui'
 import { useApi } from '../lib/api'
 import { num } from '../lib/format'
-import { eventsHref, Link } from '../lib/router'
-import { useHours } from '../lib/settings'
+import { eventsHref, Link, setQuery, useLocation } from '../lib/router'
+import { useEnv, useHours } from '../lib/settings'
 import { EventList } from './EventsPage'
 
 export function AppPage({ app }: { app: string }) {
   const hours = useHours()
-  const detail = useApi<AppDetail>(`/api/apps/${encodeURIComponent(app)}?hours=${hours}`, {
-    poll: 30_000,
-  })
+  const env = useEnv()
+  const service = useLocation().query.get('service') ?? ''
+  const detail = useApi<AppDetail>(
+    `/api/apps/${encodeURIComponent(app)}?hours=${hours}&env=${encodeURIComponent(env)}&service=${encodeURIComponent(service)}`,
+    { poll: 30_000 },
+  )
   return (
     <div class="page">
       <Crumbs items={[{ label: 'Overview', href: '/' }, { label: app }]} />
       <Loaded resource={detail}>
         {(d) =>
-          d.kind === 'lines' ? <SourceView d={d} /> : <AppView d={d} reload={detail.reload} />
+          d.kind === 'lines' ? (
+            <SourceView d={d} env={env} />
+          ) : (
+            <AppView d={d} service={service} reload={detail.reload} />
+          )
         }
       </Loaded>
     </div>
   )
 }
 
-function AppView({ d, reload }: { d: AppDetail; reload: () => void }) {
+function AppView({ d, service, reload }: { d: AppDetail; service: string; reload: () => void }) {
   const series = alertSeries(d.errorSeries, d.warnSeries)
   const open = d.issues.filter((i) => i.state === 'open')
   return (
@@ -36,11 +43,30 @@ function AppView({ d, reload }: { d: AppDetail; reload: () => void }) {
           <span class="muted small">
             Last event <Ago ts={d.lastEventAt} />
           </span>
-          <Link class="btn" href={eventsHref({ app: d.app })}>
+          <Link class="btn" href={eventsHref({ app: d.app, service })}>
             Browse events
           </Link>
         </div>
       </div>
+
+      {d.services.length > 1 && (
+        <div class="segmented" role="group" aria-label="Service">
+          <button type="button" aria-pressed={!service} onClick={() => setQuery({ service: null })}>
+            All services
+          </button>
+          {d.services.map((s) => (
+            <button
+              key={s.service}
+              type="button"
+              aria-pressed={service === s.service}
+              onClick={() => setQuery({ service: s.service })}
+            >
+              {s.service}
+              {s.errors > 0 && <span class="count critical"> {num(s.errors)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div class="stats">
         <Stat
@@ -111,7 +137,7 @@ function newHint(issues: IssueSummary[]) {
 }
 
 /** An agent-shipped source has no levels, so show volume and the latest lines. */
-function SourceView({ d }: { d: AppDetail }) {
+function SourceView({ d, env }: { d: AppDetail; env: string }) {
   const series = [{ key: 'v', label: 'Lines', color: VOLUME_COLOR, values: d.volumeSeries }]
   return (
     <>
@@ -130,7 +156,7 @@ function SourceView({ d }: { d: AppDetail }) {
         <StackedColumns window={d.window} series={series} empty="No lines in this window" />
       </Card>
       <Card title="Latest lines" flush>
-        <EventList filter={{ app: d.app }} compact />
+        <EventList filter={{ app: d.app, env }} compact />
       </Card>
     </>
   )

@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import app from '@/hono-app/app'
+import secrets from '@/secrets'
 import { importApp } from '@/scripts/import-ingested-logs'
 import { getRetentionDays } from '@/services/config'
 import { insertLines } from '@/services/event-store'
@@ -22,6 +23,16 @@ describe('SDK download', () => {
     expect(await res.text()).toBe(
       fs.readFileSync(path.join(import.meta.dir, '../sdk/logtrail.ts'), 'utf8'),
     )
+  })
+
+  it('serves setup instructions as plain text without secrets', async () => {
+    const res = await app.request('http://logs.example.com/api/client/setup.md')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toStartWith('text/plain')
+    const text = await res.text()
+    expect(text).toStartWith('# Connect this project to logtrail')
+    expect(text).toContain('http://logs.example.com/api/client/logtrail.ts')
+    expect(text).not.toContain(secrets.agentSecret)
   })
 
   it('serves ESM and CommonJS builds that work', async () => {

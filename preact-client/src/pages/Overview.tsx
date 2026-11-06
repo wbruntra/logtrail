@@ -4,14 +4,17 @@ import { Ago, Card, Empty, Loaded, Stat } from '../components/ui'
 import { useApi } from '../lib/api'
 import { num, plural } from '../lib/format'
 import { appHref, Link, rowLink } from '../lib/router'
-import { useHours, WINDOWS } from '../lib/settings'
+import { useEnv, useHours, WINDOWS } from '../lib/settings'
 
 const sumSeries = (apps: AppSummary[], key: 'errorSeries' | 'warnSeries', n: number) =>
   apps.reduce((acc, a) => acc.map((v, i) => v + a[key][i]), new Array<number>(n).fill(0))
 
 export function Overview() {
   const hours = useHours()
-  const overview = useApi<OverviewData>(`/api/apps?hours=${hours}`, { poll: 30_000 })
+  const env = useEnv()
+  const overview = useApi<OverviewData>(`/api/apps?hours=${hours}&env=${encodeURIComponent(env)}`, {
+    poll: 30_000,
+  })
   return <Loaded resource={overview}>{(data) => <OverviewView data={data} />}</Loaded>
 }
 
