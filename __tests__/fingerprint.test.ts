@@ -76,4 +76,21 @@ describe('fingerprint', () => {
     ].join('\n')
     expect(topFrame(stack)).toBe('at handler (/app/src/a.ts)')
   })
+
+  it('groups per-account log lines but keeps the failure category', () => {
+    const line = (account: string, category: string) =>
+      fingerprint({
+        app: 'a',
+        level: 'warn',
+        msg: `task FAIL token=2239 platform=instagram account=${account} social_account=16903 influencer=8979 category=${category} ms=6230`,
+      })
+    expect(line('selinarose_', 'UNKNOWN_ERROR')).toBe(line('solcarlosofficial', 'UNKNOWN_ERROR'))
+    expect(line('selinarose_', 'UNKNOWN_ERROR')).not.toBe(line('selinarose_', 'AUTH_ERROR'))
+  })
+
+  it('folds quoted identity values and camelCase id keys', () => {
+    const a = fingerprint({ app: 'a', level: 'error', msg: 'failed user="Jo Bloggs" sheetId=abc' })
+    const b = fingerprint({ app: 'a', level: 'error', msg: 'failed user="Al Smith" sheetId=xyz' })
+    expect(a).toBe(b)
+  })
 })

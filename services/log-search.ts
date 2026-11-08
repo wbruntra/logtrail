@@ -1,7 +1,7 @@
 import { db } from '@database/db'
-import type { EventRow, Level } from '@database/schema'
+import type { Database, EventRow, Level } from '@database/schema'
 import type { EventView } from '@/shared/api-types'
-import { sql } from 'kysely'
+import { type SelectQueryBuilder, sql } from 'kysely'
 import { type Scope, inScope } from './scope'
 import {
   getNeighbors,
@@ -40,6 +40,8 @@ export interface SearchOptions extends Scope {
   route?: string
   /** Request path prefix, e.g. /api/sheets */
   pathPrefix?: string
+  /** Fields without a column of their own (the event's `extra`), all of which must equal these */
+  extra?: Record<string, string | number | boolean>
   /** Lines of the same app to include before and after each match */
   context?: number
   limit?: number
@@ -68,8 +70,15 @@ function isoBound(value: string | undefined): string | null | undefined {
   return Number.isNaN(ms) ? null : new Date(ms).toISOString()
 }
 
-/** The newest `limit` matching rows in chronological order, with the count of all matches. */
-async function findMatches({
+type Filtered = {
+  filtered: SelectQueryBuilder<Database, 'events', {}>
+  re: RegExp | undefined
+}
+
+const EXTRA_KEY = /^[A-Za-z_][\w]*$/
+
+/** The events table narrowed by every filter except limit, and the regex still to apply in JS. */
+function buildFilter({
   app,
   env,
   service,
@@ -85,8 +94,8 @@ async function findMatches({
   userId,
   route,
   pathPrefix,
-  limit = 100,
-}: SearchOptions): Promise<{ rows: EventRow[]; totalMatches: number } | { error: string }> {
+  extra,
+}: SearchOptions): Filtered | { error: string } {
   let re: RegExp | undefined
   if (query && regex) {
     try {
@@ -141,6 +150,14 @@ async function findMatches({
   if (pathPrefix) {
     filtered = filtered.where(sql<boolean>`substr(path, 1, ${pathPrefix.length}) = ${pathPrefix}`)
   }
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    if (!EXTRA_KEY.test(key)) return { error: `Invalid extra field name: ${key}` }
+    // Compared as text, so tokenId 2239 matches "2239" and true matches "1"
+    const wanted = typeof value === 'boolean' ? (value ? '1' : '0') : String(value)
+    filtered = filtered.where(
+      sql<boolean>`cast(json_extract(extra, ${'$.' + key}) as text) = ${wanted}`,
+    )
+  }
   if (query && !re) {
     filtered = filtered.where(
       caseSensitive
@@ -148,6 +165,18 @@ async function findMatches({
         : sql<boolean>`instr(lower(${SEARCH_TEXT}), lower(${query})) > 0`,
     )
   }
+
+  return { filtered, re }
+}
+
+/** The newest `limit` matching rows in chronological order, with the count of all matches. */
+async function findMatches(
+  options: SearchOptions,
+): Promise<{ rows: EventRow[]; totalMatches: number } | { error: string }> {
+  const built = buildFilter(options)
+  if ('error' in built) return built
+  const { filtered, re } = built
+  const { limit = 100 } = options
 
   let newest: EventRow[]
   let totalMatches: number
@@ -221,4 +250,91 @@ export function searchEvents(options: SearchOptions): Promise<EventSearchResult>
     ...toEventView(row),
     ...(options.context && { context: context.map(toEventView) }),
   }))
+}
+
+const GROUP_COLUMNS = {
+  app: sql`app`,
+  service: sql`service`,
+  env: sql`env`,
+  level: sql`level`,
+  code: sql`code`,
+  status: sql`status`,
+  route: sql`route`,
+  release: sql`release`,
+  userId: sql`user_id`,
+  hour: sql`substr(ts, 1, 13) || ':00'`,
+  day: sql`substr(ts, 1, 10)`,
+} as const
+
+export const GROUP_BY_FIELDS = [...Object.keys(GROUP_COLUMNS), 'extra.<field>'] as const
+
+export interface CountOptions extends SearchOptions {
+  /** A column (app, service, env, level, code, status, route, release, userId), hour, day, or extra.<field> */
+  groupBy: string
+  /** Groups returned, largest first (default 20) */
+  groups?: number
+}
+
+export type CountResult =
+  | { error: string }
+  | {
+      groupBy: string
+      since: string
+      totalMatches: number
+      groups: {
+        value: string | number | null
+        count: number
+        firstSeen: string
+        lastSeen: string
+      }[]
+      truncated: boolean
+    }
+
+/** Matching events counted per value of one field: failures per platform, errors per hour. */
+export async function countEvents({
+  groupBy,
+  groups = 20,
+  ...options
+}: CountOptions): Promise<CountResult> {
+  if (options.regex) return { error: 'count_events does not support regex queries' }
+  // Counting everything ever retained is rarely what's wanted
+  const since = options.since ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  let valueExpr
+  if (groupBy.startsWith('extra.')) {
+    const key = groupBy.slice('extra.'.length)
+    if (!EXTRA_KEY.test(key)) return { error: `Invalid extra field name: ${key}` }
+    valueExpr = sql`json_extract(extra, ${'$.' + key})`
+  } else if (groupBy in GROUP_COLUMNS) {
+    valueExpr = GROUP_COLUMNS[groupBy as keyof typeof GROUP_COLUMNS]
+  } else {
+    return { error: `groupBy must be one of: ${GROUP_BY_FIELDS.join(', ')}` }
+  }
+
+  const built = buildFilter({ ...options, since })
+  if ('error' in built) return built
+  const rows = await built.filtered
+    .select((eb) => [
+      valueExpr.as('value'),
+      eb.fn.countAll<number>().as('count'),
+      eb.fn.min('ts').as('firstSeen'),
+      eb.fn.max('ts').as('lastSeen'),
+    ])
+    .groupBy(valueExpr)
+    .orderBy('count', 'desc')
+    .orderBy('lastSeen', 'desc')
+    .limit(groups + 1)
+    .execute()
+
+  const shown = rows.slice(0, groups) as unknown as Extract<
+    CountResult,
+    { groups: unknown }
+  >['groups']
+  return {
+    groupBy,
+    since,
+    totalMatches: shown.reduce((n, g) => n + g.count, 0),
+    groups: shown,
+    truncated: rows.length > groups,
+  }
 }

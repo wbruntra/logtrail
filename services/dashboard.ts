@@ -3,7 +3,7 @@ import type { EventRow } from '@database/schema'
 import type { AlertLevel } from '@/shared/api-types'
 import { sql } from 'kysely'
 import { type EventJson, toEvent } from './event-store'
-import { ALERT_LEVELS, issueSummaries } from './issues'
+import { ALERT_LEVELS, issueSummaries, notMuted, withStates } from './issues'
 import { type Scope, inScope } from './scope'
 
 export type { Issue } from './issues'
@@ -21,6 +21,14 @@ export interface DashboardOptions extends Scope {
   issueLimit?: number | string
   /** Include stack traces in recentErrors (default true) */
   stacks?: boolean
+  /** Only events from this release */
+  release?: string
+  /** 'recent' (default): issues most recently seen first; 'count': most occurrences first */
+  sort?: 'recent' | 'count'
+  /** Only issues first seen inside the window */
+  newOnly?: boolean
+  /** Leave out muted issues (and their events) and resolved issues that haven't recurred */
+  hideTriaged?: boolean
 }
 
 function int(value: number | string | undefined, fallback: number, max: number): number {
@@ -58,15 +66,17 @@ function recentError(row: EventRow, stacks: boolean) {
 export async function getDashboard(options: DashboardOptions = {}) {
   const hours = int(options.hours, 24, MAX_HOURS)
   const limit = int(options.limit, 25, 200)
-  const issueLimit = int(options.issueLimit, 50, 250)
+  const issueLimit = int(options.issueLimit, 50, 251)
   const levels = alertLevels(options.levels)
-  const { app, env, service } = options
+  const { app, env, service, release, sort, hideTriaged } = options
 
   const now = new Date()
   const since = new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString()
   let inWindow = db.selectFrom('events').where('level', 'in', ALERT_LEVELS).where('ts', '>=', since)
   if (app) inWindow = inWindow.where('app', '=', app)
   inWindow = inScope(inWindow, { env, service })
+  if (release) inWindow = inWindow.where('release', '=', release)
+  if (hideTriaged) inWindow = inWindow.where(notMuted)
   const count = sql<number>`count(*)`.as('count')
 
   const [byAppLevel, byHourLevel, topCodes, recent, issues] = await Promise.all([
@@ -90,7 +100,18 @@ export async function getDashboard(options: DashboardOptions = {}) {
       .orderBy('id', 'desc')
       .limit(limit)
       .execute(),
-    issueSummaries({ app, env, service, levels, since, limit: issueLimit }),
+    issueSummaries({
+      app,
+      env,
+      service,
+      levels,
+      since,
+      release,
+      sort,
+      hideTriaged,
+      newSince: options.newOnly ? since : undefined,
+      limit: issueLimit,
+    }).then((found) => withStates(found, since)),
   ])
 
   const totals = { errors: 0, warns: 0 }

@@ -5,8 +5,8 @@ import { LEVELS } from '@database/schema'
 import { getDashboard } from '@/services/dashboard'
 import { appStats, getHistory } from '@/services/event-query'
 import { getLogHistory } from '@/services/history-file'
-import { getIssueDetail } from '@/services/issues'
-import { searchEvents } from '@/services/log-search'
+import { getIssueDetail, issueSummaries, setIssueState } from '@/services/issues'
+import { GROUP_BY_FIELDS, countEvents, searchEvents } from '@/services/log-search'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { Hono } from 'hono'
@@ -48,8 +48,15 @@ const serviceParam = z
     'Only this service (process) of the app, e.g. "tpp-auth". Services are listed by list_log_sources.',
   )
 
+const extraParam = z
+  .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+  .optional()
+  .describe(
+    'Match fields the app sent beyond the standard ones (they appear in an event\'s "extra"), all of which must equal these, e.g. {"platform":"instagram_direct","step":"FETCH_MEDIA"}',
+  )
+
 function createMcpServer() {
-  const server = new McpServer({ name: 'logtrail', version: '1.1.0' })
+  const server = new McpServer({ name: 'logtrail', version: '1.2.0' })
 
   server.registerTool(
     'list_log_sources',
@@ -74,7 +81,7 @@ function createMcpServer() {
     'get_error_summary',
     {
       description:
-        'Summarize errors and warnings from ingested apps over a window: totals, per-app counts, hourly counts, top error codes, issues (recurring errors grouped by fingerprint) and the most recent events. In issues, count and users cover the window only; firstSeen is the earliest occurrence retained at any time. Recent events omit stack traces unless stacks is true; drill into an issue with get_issue(fingerprint) for its stack, breakdowns by path/status/release/user, and occurrences.',
+        'Summarize errors and warnings from ingested apps over a window: totals, per-app counts, hourly counts, top error codes, issues (recurring errors grouped by fingerprint) and the most recent events. In issues, count and users cover the window only; firstSeen is the earliest occurrence retained at any time. Muted issues, and resolved ones that have not recurred, are left out unless includeTriaged is true; hide noise with set_issue_state. Recent events omit stack traces unless stacks is true; drill into an issue with get_issue(fingerprint) for its stack, breakdowns by path/status/release/user, and occurrences.',
       inputSchema: {
         source: z
           .string()
@@ -93,7 +100,23 @@ function createMcpServer() {
           .min(0)
           .max(250)
           .optional()
-          .describe('Max issues, most recently seen first (default 20)'),
+          .describe('Max issues (default 20), in the order given by sort'),
+        sort: z
+          .enum(['recent', 'count'])
+          .optional()
+          .describe('Order issues by most recently seen (default) or by most occurrences'),
+        release: z
+          .string()
+          .optional()
+          .describe('Only events from this release, e.g. to see what a deploy broke'),
+        newOnly: z
+          .boolean()
+          .optional()
+          .describe('Only issues first seen inside the window (default false)'),
+        includeTriaged: z
+          .boolean()
+          .optional()
+          .describe('Also include muted and resolved issues (default false)'),
         limit: z
           .number()
           .int()
@@ -107,7 +130,20 @@ function createMcpServer() {
           .describe('Include stack traces in recent events (default false)'),
       },
     },
-    async ({ source, service, env, hours, levels, issues = 20, limit = 10, stacks = false }) => {
+    async ({
+      source,
+      service,
+      env,
+      hours,
+      levels,
+      issues = 20,
+      sort,
+      release,
+      newOnly,
+      includeTriaged = false,
+      limit = 10,
+      stacks = false,
+    }) => {
       const app = appOf(source)
       const summary = await getDashboard({
         app,
@@ -116,6 +152,12 @@ function createMcpServer() {
         hours,
         levels,
         stacks,
+        release,
+        sort,
+        newOnly,
+        hideTriaged: !includeTriaged,
+        // One more than shown, to tell whether the list was cut off
+        issueLimit: issues + 1,
         limit: limit || 1,
       })
       const shown = summary.issues.slice(0, issues)
@@ -239,6 +281,7 @@ function createMcpServer() {
         userId: z.string().optional(),
         route: z.string().optional().describe('Route pattern, exact, e.g. "/users/:id"'),
         pathPrefix: z.string().optional().describe('Request path prefix, e.g. "/api/sheets"'),
+        extra: extraParam,
         context: z
           .number()
           .int()
@@ -266,6 +309,74 @@ function createMcpServer() {
         )
       }
       const result = await searchEvents({ app: appOf(source), ...filters })
+      return 'error' in result ? fail(result.error) : text(result)
+    },
+  )
+
+  server.registerTool(
+    'set_issue_state',
+    {
+      description:
+        'Triage issues by fingerprint (from get_error_summary or search_logs). "muted" hides an issue from summaries and counts for good, for noise such as scanner traffic; "resolved" hides it until it happens again, when it reopens as a regression; "open" undoes either. Use this once an issue is understood so get_error_summary keeps showing only what needs attention.',
+      inputSchema: {
+        fingerprints: z
+          .array(z.string().regex(/^[0-9a-f]{16}$/))
+          .min(1)
+          .max(100)
+          .describe('Issue fingerprints'),
+        state: z.enum(['open', 'resolved', 'muted']),
+      },
+    },
+    async ({ fingerprints, state }) => {
+      const known = new Set(
+        (await issueSummaries({ fingerprints, limit: fingerprints.length })).map(
+          (i) => i.fingerprint,
+        ),
+      )
+      const unknown = fingerprints.filter((f) => !known.has(f))
+      if (unknown.length) return fail(`No issue with fingerprint ${unknown.join(', ')}`)
+      await setIssueState(fingerprints, state)
+      return text({ updated: fingerprints.length, state })
+    },
+  )
+
+  server.registerTool(
+    'count_events',
+    {
+      description: `Count matching events per value of one field, largest first: failures per platform, errors per route, events per hour. Takes the same filters as search_logs (default window: the last 24 hours; regex is not supported). groupBy is one of ${GROUP_BY_FIELDS.join(', ')}; extra.<field> groups by a field the app sent beyond the standard ones, e.g. extra.platform.`,
+      inputSchema: {
+        groupBy: z.string().describe(`Field to group by: ${GROUP_BY_FIELDS.join(', ')}`),
+        groups: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Groups to return (default 20)'),
+        source: z
+          .string()
+          .optional()
+          .describe('One app, e.g. "ingested:myapp" or "myapp". Omit to count every app.'),
+        service: serviceParam,
+        env: envParam,
+        query: z.string().optional().describe('Text to find in any field'),
+        caseSensitive: z.boolean().optional(),
+        since: z
+          .string()
+          .optional()
+          .describe('ISO timestamp, inclusive lower bound (default 24h ago)'),
+        until: z.string().optional().describe('ISO timestamp, inclusive upper bound'),
+        levels: z.array(z.enum(LEVEL_FILTERS)).optional(),
+        status: z.union([z.number().int(), z.string().regex(/^[1-5]xx$/i)]).optional(),
+        code: z.string().optional().describe('Error code, exact'),
+        userId: z.string().optional(),
+        route: z.string().optional().describe('Route pattern, exact'),
+        pathPrefix: z.string().optional(),
+        extra: extraParam,
+      },
+    },
+    async ({ source, ...options }) => {
+      const result = await countEvents({ app: appOf(source), ...options })
       return 'error' in result ? fail(result.error) : text(result)
     },
   )

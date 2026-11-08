@@ -110,4 +110,76 @@ describe('mcp tools', () => {
     expect(results).toMatchObject([{ app: 'shop', status: 500, msg: 'Order 1 not found' }])
     await expect(call('search_logs', {})).rejects.toThrow('Provide a query or at least one filter')
   })
+
+  it('hides muted and resolved issues, and reopens a resolved one that recurs', async () => {
+    await insertEvents('shop', [
+      event({ msg: 'scanner hit', path: '/x', status: 404, code: 'SCAN' }),
+      event({ msg: 'real bug', code: 'BUG' }),
+    ])
+    const { issues } = await call('get_error_summary')
+    const fp = (code: string) => issues.find((i: { code: string }) => i.code === code).fingerprint
+
+    await call('set_issue_state', { fingerprints: [fp('SCAN')], state: 'muted' })
+    const after = await call('get_error_summary')
+    expect(after.issues.map((i: { code: string }) => i.code)).toEqual(['BUG'])
+    expect(after.totals.errors).toBe(1)
+
+    const all = await call('get_error_summary', { includeTriaged: true })
+    expect(all.issues).toHaveLength(2)
+    expect(all.issues.find((i: { code: string }) => i.code === 'SCAN').state).toBe('muted')
+
+    await call('set_issue_state', { fingerprints: [fp('BUG')], state: 'resolved' })
+    expect((await call('get_error_summary')).issues).toHaveLength(0)
+    await Bun.sleep(5)
+    await insertEvents('shop', [event({ msg: 'real bug', code: 'BUG' })])
+    const reopened = await call('get_error_summary')
+    expect(reopened.issues).toMatchObject([{ code: 'BUG', state: 'open', regressed: true }])
+
+    await expect(
+      call('set_issue_state', { fingerprints: ['0123456789abcdef'], state: 'muted' }),
+    ).rejects.toThrow('No issue with fingerprint')
+  })
+
+  it('sorts issues by count, filters by release and finds new issues', async () => {
+    await insertEvents('shop', [
+      event({ code: 'RARE', release: 'v1' }),
+      ...[1, 2, 3].map(() => event({ code: 'COMMON', release: 'v2' })),
+    ])
+    const recent = await call('get_error_summary', { sort: 'count' })
+    expect(recent.issues.map((i: { code: string }) => i.code)).toEqual(['COMMON', 'RARE'])
+    const v1 = await call('get_error_summary', { release: 'v1' })
+    expect(v1.issues.map((i: { code: string }) => i.code)).toEqual(['RARE'])
+    const fresh = await call('get_error_summary', { newOnly: true })
+    expect(fresh.issues).toHaveLength(2)
+  })
+
+  it('filters search by extra fields', async () => {
+    await insertEvents('shop', [
+      event({ msg: 'a', tokenId: 2239, platform: 'instagram' } as never),
+      event({ msg: 'b', tokenId: 1, platform: 'youtube' } as never),
+    ])
+    const byPlatform = await call('search_logs', { extra: { platform: 'youtube' } })
+    expect(byPlatform.results.map((r: { msg: string }) => r.msg)).toEqual(['b'])
+    const byNumber = await call('search_logs', { extra: { tokenId: 2239 } })
+    expect(byNumber.results.map((r: { msg: string }) => r.msg)).toEqual(['a'])
+    await expect(call('search_logs', { extra: { 'a.b': 1 } })).rejects.toThrow(
+      'Invalid extra field name',
+    )
+  })
+
+  it('counts events per field value', async () => {
+    await insertEvents('shop', [
+      event({ platform: 'instagram', status: 500 } as never),
+      event({ platform: 'instagram', status: 404 } as never),
+      event({ platform: 'youtube', status: 500 } as never),
+    ])
+    const byPlatform = await call('count_events', { groupBy: 'extra.platform' })
+    expect(byPlatform.groups).toMatchObject([
+      { value: 'instagram', count: 2 },
+      { value: 'youtube', count: 1 },
+    ])
+    const serverErrors = await call('count_events', { groupBy: 'status', status: '5xx' })
+    expect(serverErrors.groups).toMatchObject([{ value: 500, count: 2 }])
+    await expect(call('count_events', { groupBy: 'nope' })).rejects.toThrow('groupBy must be')
+  })
 })

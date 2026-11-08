@@ -7,6 +7,13 @@ const NUMBER = /\d+/g
 // A path segment that could be an id, in a message: /sheets/2ExX98E 404
 const PATH_SEGMENT = /(?<=\/)[\w-]{7,}(?=[/?#\s)]|$)/g
 
+// key=value pairs in a log line: task FAIL token=2239 account=selinarose_ ms=6230
+const KEY_VALUE = /\b([A-Za-z_][\w.]*)=("[^"]*"|\S+)/g
+// Keys whose value says who or what the event is about, not what went wrong:
+// account, user_id, tokenId. Other pairs (category=UNKNOWN_ERROR) stay in the fingerprint.
+const IDENTITY_KEY =
+  /(^|_)(id|name|account|nickname|handle|email|user|username|token|influencer)$|[a-z]Id$/
+
 /**
  * Short random ids such as 2ExX98E or KvxBvxE, and base64url tokens: seven or
  * more characters with a letter and a digit, or letters in irregular mixed
@@ -25,6 +32,7 @@ export function isSlugId(seg: string): boolean {
 /** Strip the parts of a message that vary between occurrences of the same problem. */
 export function normalizeMessage(msg: string): string {
   return msg
+    .replace(KEY_VALUE, (pair, key: string) => (IDENTITY_KEY.test(key) ? `${key}=<v>` : pair))
     .replace(UUID, '<id>')
     .replace(PATH_SEGMENT, (seg) => (isSlugId(seg) ? '<id>' : seg))
     .replace(HEX_ID, '<id>')

@@ -42,6 +42,14 @@ export interface IssueFilter extends Scope {
   levels?: readonly AlertLevel[]
   /** Count only occurrences at or after this ISO time */
   since?: string
+  /** Count only occurrences from this release */
+  release?: string
+  /** Only issues first seen at or after this ISO time, over all retained events */
+  newSince?: string
+  /** Leave out muted issues and resolved ones that haven't happened again */
+  hideTriaged?: boolean
+  /** 'recent' (default): most recently seen first; 'count': most occurrences first */
+  sort?: 'recent' | 'count'
   limit: number
 }
 
@@ -53,6 +61,10 @@ export async function issueSummaries({
   service,
   levels,
   since,
+  release,
+  newSince,
+  hideTriaged,
+  sort = 'recent',
   limit,
 }: IssueFilter): Promise<Issue[]> {
   let groups = db
@@ -67,14 +79,36 @@ export async function issueSummaries({
       sql<string | null>`group_concat(distinct release)`.as('releases'),
     ])
     .groupBy('fingerprint')
+    .$narrowType<{ fingerprint: string }>()
+  groups = (sort === 'count' ? groups.orderBy('count', 'desc') : groups)
     .orderBy('lastSeen', 'desc')
     .limit(limit)
-    .$narrowType<{ fingerprint: string }>()
   if (fingerprints) groups = groups.where('fingerprint', 'in', fingerprints)
   if (app) groups = groups.where('app', '=', app)
   groups = inScope(groups, { env, service })
   if (levels) groups = groups.where('level', 'in', levels)
   if (since) groups = groups.where('ts', '>=', since)
+  if (release) groups = groups.where('release', '=', release)
+  if (newSince) {
+    groups = groups.where(
+      'fingerprint',
+      'in',
+      db
+        .selectFrom('events')
+        .select('fingerprint')
+        .where('fingerprint', 'is not', null)
+        .groupBy('fingerprint')
+        .having((eb) => eb(eb.fn.min('ts'), '>=', newSince)),
+    )
+  }
+  if (hideTriaged) {
+    // A resolved issue stays hidden only while it hasn't recurred since (see stateOf)
+    groups = groups.having(
+      sql<boolean>`fingerprint not in (select fingerprint from issue_states where status = 'muted')
+        and max(ts) > coalesce((select changed_at from issue_states s
+          where s.fingerprint = events.fingerprint and s.status = 'resolved'), '')`,
+    )
+  }
 
   const rows = await groups.execute()
   if (!rows.length) return []
@@ -165,6 +199,16 @@ function stateOf(row: StateRow | undefined, lastSeen: string) {
     return { state: 'open' as const, regressed: true, stateChangedAt: row.changed_at }
   }
   return { state: row.status, regressed: false, stateChangedAt: row.changed_at }
+}
+
+/** Adds triage state, regression and newness to issues from issueSummaries. */
+export async function withStates(issues: Issue[], windowSince: string) {
+  const states = await statesOf(issues.map((i) => i.fingerprint))
+  return issues.map((i) => ({
+    ...i,
+    isNew: i.firstSeen >= windowSince,
+    ...stateOf(states.get(i.fingerprint), i.lastSeen),
+  }))
 }
 
 /** Where-clause: the event doesn't belong to a muted issue. */
