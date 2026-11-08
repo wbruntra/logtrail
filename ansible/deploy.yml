@@ -4,7 +4,9 @@
 - name: Deploy logtrail
   hosts: '{{ deployment | mandatory("Pass -e deployment=<profile>, e.g. -e deployment=production") }}'
   vars:
-    bun_bin_dir: '/home/{{ ansible_user }}/.bun/bin'
+    # pm2 is installed globally with bun. ~/.local/bin/pm2 is a wrapper that runs
+    # it under the bun runtime (pm2's own shebang needs node, which is gone).
+    pm2_bin_dir: '/home/{{ ansible_user }}/.local/bin:/home/{{ ansible_user }}/.bun/bin'
     secrets_bundle: '{{ playbook_dir }}/files/{{ deployment }}'
     # Gitignored runtime files pushed from ansible/files/<profile>/ when present.
     bundled_files: [secrets.js, logtrail.config.yaml]
@@ -46,14 +48,14 @@
     - name: 5. Restart the app (pm2)
       environment:
         # pm2 is installed globally with bun, which a non-interactive shell may not have on PATH.
-        PATH: '{{ bun_bin_dir }}:{{ ansible_env.PATH }}'
+        PATH: '{{ pm2_bin_dir }}:{{ ansible_env.PATH }}'
       block:
         - name: Recreate the pm2 process if its entry script changed
           # pm2 restart keeps a process's original script path, so a changed
           # entry file needs a delete and start.
           shell: |
             set -e
-            command -v pm2 >/dev/null || { echo 'pm2 not found; install it with: bun add -g pm2 (expected in {{ bun_bin_dir }})' >&2; exit 1; }
+            command -v pm2 >/dev/null || { echo 'pm2 not found; install it with: bun add -g pm2 (expected in {{ pm2_bin_dir }})' >&2; exit 1; }
             want="{{ project_root }}/$(bun -e "console.log(require('./ecosystem.config.cjs').apps[0].script)")"
             [ -f ecosystem.config.cjs ] || { echo 'ecosystem.config.cjs missing' >&2; exit 1; }
             have=$(pm2 jlist | bun -e "const l = await Bun.stdin.json(); console.log(l.find((a) => a.name === '{{ pm2_name }}')?.pm2_env.pm_exec_path ?? '')")
