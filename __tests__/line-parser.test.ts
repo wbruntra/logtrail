@@ -1,4 +1,4 @@
-import { parseLines } from '@/services/line-parser'
+import { MAX_BLOCK_LINES, completeLineCount, parseLines } from '@/services/line-parser'
 import { describe, expect, it } from 'bun:test'
 
 describe('parseLines', () => {
@@ -58,5 +58,69 @@ describe('parseLines', () => {
     ])
     expect(events).toHaveLength(2)
     expect(events[0].stack).toBe('crashed\n    at a (/x.js:1:1)\n    at b (/x.js:2:2)')
+  })
+
+  it('keeps a pretty-printed object as one event instead of one per field', () => {
+    const events = parseLines([
+      'sending notification {',
+      '  type: "influencer-added",',
+      '  items: [',
+      '    {',
+      '      error: false,',
+      '    }, {',
+      '      id: 2',
+      '    }',
+      '  ],',
+      '}',
+      'next line',
+    ])
+    expect(events).toHaveLength(2)
+    expect(events[0]).toMatchObject({ level: 'info' })
+    expect(events[0].msg.split('\n')).toHaveLength(10)
+    expect(events[0].msg).toContain('error: false,')
+    expect(events[1].msg).toBe('next line')
+  })
+
+  it('reads the level from the first line of an object, not its fields', () => {
+    const [failed] = parseLines(['ERROR: task failed {', '  info: 1,', '}'])
+    expect(failed).toMatchObject({ level: 'error' })
+    expect(failed.msg).toContain('info: 1,')
+  })
+
+  it('joins the properties an error prints after its stack', () => {
+    const events = parseLines([
+      'ERROR: boom',
+      '    at a (/x.js:1:1) {',
+      "  code: 'E1'",
+      '}',
+      'next',
+    ])
+    expect(events).toHaveLength(2)
+    expect(events[0].stack).toContain("code: 'E1'")
+  })
+
+  it('ends an open object at the next unindented line', () => {
+    const events = parseLines(['78 |   if (x) {', '79 |     y()', 'Working 1', 'Sleeping'])
+    expect(events.map((e) => e.msg)).toEqual([
+      '78 |   if (x) {',
+      '79 |     y()',
+      'Working 1',
+      'Sleeping',
+    ])
+  })
+
+  it('cuts an object that never closes', () => {
+    const open = ['start {', ...Array.from({ length: 150 }, (_, i) => `  f${i}: 1,`)]
+    const events = parseLines(open)
+    expect(events.length).toBeGreaterThan(1)
+    expect(events[0].msg.split('\n')).toHaveLength(MAX_BLOCK_LINES)
+  })
+})
+
+describe('completeLineCount', () => {
+  it('leaves an unclosed trailing object for the next batch', () => {
+    expect(completeLineCount(['a', 'b {', '  x: 1,'])).toBe(1)
+    expect(completeLineCount(['a', 'b {', '  x: 1,', '}'])).toBe(4)
+    expect(completeLineCount(['a', 'b'])).toBe(2)
   })
 })

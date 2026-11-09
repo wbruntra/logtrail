@@ -3,7 +3,9 @@
 //   - JSON lines (pino, bunyan, winston): level, message, time and request id are mapped
 //   - morgan "dev" access lines: GET /path 200 3.9 ms - 59169
 //   - text, with an optional leading ISO timestamp and level word
-// Indented "at ..." lines are stack frames and join the event before them.
+// Indented "at ..." lines are stack frames and join the event before them. So does a
+// pretty-printed object (console.log(obj) over several lines, from "... {" to its closing
+// "}"), so its fields don't become events of their own with a level read from "error: false,".
 
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g
 const ACCESS =
@@ -11,6 +13,47 @@ const ACCESS =
 const LEADING_TS = /^(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)\s+/
 const LEADING_LEVEL = /^\[?(error|warn(?:ing)?|info|debug|trace|fatal|success)\]?\s*[:\-]?\s+/i
 const STACK_FRAME = /^\s+at\s/
+
+/** Longest multi-line object kept as one event; a dump that never closes is cut here. */
+export const MAX_BLOCK_LINES = 100
+
+/**
+ * How a line changes the nesting of a pretty-printed object: +1 when it ends by opening
+ * one ("sending notification {", "items: ["), -1 when it starts by closing one, so
+ * "}, {" nets 0 and "}," closes. Inline "{}" and "[Object]" don't count.
+ */
+export function blockDelta(line: string): number {
+  const t = line.replace(ANSI, '').trim()
+  return (/[{[]$/.test(t) ? 1 : 0) - (/^[}\]]/.test(t) ? 1 : 0)
+}
+
+/**
+ * Whether a line can be part of an open object: its fields are indented, and it ends with a
+ * closing bracket. A line at the left edge that isn't one (the next log line, or a code
+ * frame like "78 | if (x) {") means the object was cut off.
+ */
+const continuesBlock = (line: string) => /^\s/.test(line) || /^[}\]]/.test(line)
+
+/**
+ * How many leading lines hold only complete events, leaving out a trailing object that has
+ * not closed yet. Callers that send lines in batches cut there, so no object is split.
+ */
+export function completeLineCount(lines: string[]): number {
+  let depth = 0
+  let start = 0
+  lines.forEach((line, i) => {
+    if (!line.trim()) return
+    if (depth > 0 && !continuesBlock(line)) depth = 0
+    if (depth === 0) {
+      start = i
+      depth = Math.max(0, blockDelta(line))
+      return
+    }
+    depth += blockDelta(line)
+    if (i - start + 1 >= MAX_BLOCK_LINES) depth = 0
+  })
+  return depth > 0 ? start : lines.length
+}
 
 type Level = 'error' | 'warn' | 'info' | 'debug' | 'success'
 
@@ -108,15 +151,30 @@ export function parseLines(
   { requestAlerts = true }: ParseOptions = {},
 ): ParsedLine[] {
   const events: ParsedLine[] = []
+  // The event an unclosed pretty-printed object belongs to, how deep we are, how many lines in
+  let block: { event: ParsedLine; depth: number; size: number; inStack: boolean } | undefined
   for (const raw of lines) {
     const text = raw.replace(ANSI, '').trimEnd()
     if (!text.trim()) continue
     const previous = events[events.length - 1]
-    if (STACK_FRAME.test(text) && previous) {
-      previous.stack = previous.stack ? `${previous.stack}\n${text}` : `${previous.msg}\n${text}`
+    if (block && !continuesBlock(text)) block = undefined
+    if (block) {
+      const field = block.inStack ? 'stack' : 'msg'
+      block.event[field] = `${block.event[field]}\n${text}`
+      block.depth += blockDelta(text)
+      block.size++
+      if (block.depth <= 0 || block.size >= MAX_BLOCK_LINES) block = undefined
       continue
     }
-    events.push(fromJson(text) ?? fromAccess(text.trim(), requestAlerts) ?? fromText(text.trim()))
+    if (STACK_FRAME.test(text) && previous) {
+      previous.stack = previous.stack ? `${previous.stack}\n${text}` : `${previous.msg}\n${text}`
+      // An error with extra properties ends its last frame with "{": "at x (/x.js:1:1) {"
+      if (blockDelta(text) > 0) block = { event: previous, depth: 1, size: 1, inStack: true }
+      continue
+    }
+    const event = fromJson(text) ?? fromAccess(text.trim(), requestAlerts) ?? fromText(text.trim())
+    events.push(event)
+    if (blockDelta(text) > 0) block = { event, depth: 1, size: 1, inStack: false }
   }
   return events
 }

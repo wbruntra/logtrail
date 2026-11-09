@@ -17,6 +17,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 // @ts-expect-error tail-stream ships no types
 import tailStream from 'tail-stream'
+import { completeLineCount } from '../services/line-parser'
 
 interface Tags {
   app: string
@@ -118,7 +119,14 @@ async function flush(): Promise<void> {
   for (const q of queues) {
     if (q.sending || !q.lines.length) continue
     q.sending = true
-    const batch = q.lines.splice(0, BATCH_LINES)
+    // Don't cut a batch inside a pretty-printed object; its rest arrives with the next lines
+    const candidate = q.lines.slice(0, BATCH_LINES)
+    const complete = completeLineCount(candidate)
+    const batch = q.lines.splice(0, complete > 0 ? complete : candidate.length)
+    if (!batch.length) {
+      q.sending = false
+      continue
+    }
     if (!(await send(q, batch))) {
       q.lines.unshift(...batch)
       if (q.lines.length > MAX_BUFFER_SIZE) {
